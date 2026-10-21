@@ -99,7 +99,7 @@ body.locked{padding-bottom:0}
 .ul-rem input{width:22px;height:22px;accent-color:var(--blue)}
 .ul-err{min-height:22px;margin-top:10px;font-size:15px;color:var(--red)}
 .ul-note{font-size:13px;color:var(--sub);margin-top:8px;line-height:1.4}
-.shake{animation:shake .45s cubic-bezier(.36,.07,.19,.97)}
+.shake{animation:shake .4s cubic-bezier(.36,.07,.19,.97)}
 @keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-9px)}40%,60%{transform:translateX(9px)}}
 @media(prefers-reduced-motion:reduce){.shake{animation:none}}
 .lt .lockbtn{width:auto;padding:0 8px;font-size:15px}
@@ -164,3 +164,17 @@ button.tr-r:active{background:var(--fill)}.tr-r .chev{color:var(--ter);font-weig
    .unlock, #pane, #rviewer close button, #ptr, #newbar; sheets keep a gap below the status bar. */
 .sheet{max-height:calc(100% - 44px - env(safe-area-inset-top))}
 html{background:var(--bg)}
+/* B5 motion. Durations 200–400 ms, transform/opacity only; nothing transformed or will-change at rest. */
+:root{--spr:cubic-bezier(.2,.9,.25,1)}
+@supports (transition-timing-function:linear(0,1)){:root{--spr:linear(0, 0.096 2.4%, 0.33 6.2%, 0.62 11%, 0.84 16.5%, 0.96 22%, 1.02 28.5%, 1.03 35%, 1.015 45%, 1.004 58%, 1)}}
+.mv-ghost{position:fixed;inset:0;z-index:32;pointer-events:none}
+.mv-ghost.mv-unlock{z-index:40;background:var(--bg)}
+@media (prefers-reduced-motion:no-preference){
+ .row[role=button],.btn,.chip,.tab,.hm-c,.nb,.tchip,button.tr-r,.rc-th,.seg button,a.row[data-drill],.rbtn{transition:transform .2s var(--spr)}
+ .btn:active,.chip:active,.tab:active,.hm-c:active,.nb:active,.tchip:active,.rc-th:active,.seg button:active,.rbtn:active{transform:scale(.96)}
+ .row[role=button]:active,button.tr-r:active,a.row[data-drill]:active{transform:scale(.985)}
+}
+::view-transition-old(root),::view-transition-new(root){animation-duration:.24s}
+::view-transition-group(ecard){animation:none}
+::view-transition-old(ecard){animation:none;opacity:0}
+::view-transition-new(ecard){animation:none;transform-origin:0 0}

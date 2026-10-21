@@ -84,7 +84,7 @@ function listRes(keep){if(!keep)lim.list=PAGE;$("#chips").innerHTML=chipsHTML();
  $("#res").innerHTML=`<div class="wrap"><div class="sf" style="padding-top:4px"><span id="cnt">${a.length}</span> 笔 · 支出 ${fmt(exOf(a))} · 收入 ${fmt(incOf(a))}</div>${curNote(a)}${a.length?days(a,g=>"支出 "+fmt(exOf(g)),lim.list)+more("list",a.length):E.length?
  empty('<span class="mag" style="transform:scale(2)"></span>',"没有找到结果",`没有符合${st.q?`“${esc(st.q)}”和`:""}当前筛选的记录。`,'<button class="btn sec" data-reset="1">清除筛选</button>'):
  empty('<span class="ti-list" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',"还没有记录","记账管家入账并发布后，记录会显示在这里。")}</div>`;
- $("#sheet").innerHTML=sheet?sheetHTML():""}
+ const sh=$("#sheet"),was=!!sh.innerHTML;if(was&&!sheet)ghostOut(sh);sh.innerHTML=sheet?sheetHTML():"";if(!was&&sheet)sheetIn(sh)}
 const sel=(k,label,vals,lab=v=>v)=>`<div class="row sel"><span class="m">${label}</span><span class="v">${esc(st[k]?lab(st[k]):"全部")}</span><span class="chev"></span><select data-f="${k}" aria-label="${label}"><option value="">全部</option>${vals.map(v=>`<option value="${esc(v)}"${st[k]===v?" selected":""}>${esc(lab(v))}</option>`).join("")}</select></div>`;
 function sheetHTML(){return `<div class="dim" data-close="1"></div><div class="sheet"><div class="grab"></div><div class="navbar"><button class="nb" data-reset="1">重置</button><span class="t">筛选</span><button class="nb b" data-close="1">完成</button></div><div class="body" style="padding:0 16px 24px">
  <div class="sh">月份</div><div class="group">${sel("month","月份",uniq("ym").reverse(),v=>v.replace("-","年")+"月")}</div>
@@ -173,8 +173,8 @@ function entrySheet(r){const s=r.type==="income"?"+":r.type==="transfer"?"":"-";
  ${r.rc?`<div class="rc" id="rc" data-th="${r.rc.thumb}" data-full="${r.rc.id}"><button class="rc-th" data-rview="1" aria-label="查看收据大图"><span class="rc-ph">正在解密收据…</span></button></div>`:r.hasAtt?`<div class="rc" id="rc"><div class="rc-th"><span class="rc-ph err">收据暂不可用</span></div></div>`:""}
  <div class="group" style="margin-top:16px">${f("时间",esc(r.d+" "+r.hm),"time")}${f("类型",TYPE[r.type],"type")}${f("分类",esc(r.category||"—"),"category")}${f("账户",esc(r.account||"—"),"account")}${f("商户",esc(r.payee||"—"),"payee")}${f("备注",esc(r.note||"—"),"note")}${f("来源",esc(SRC[r.source]||r.source||"—"),"source")}${f("币种",esc(r.currency),"currency")}${f("状态",isPend(r)?'<span class="tag" style="margin:0">待确认</span>':"已确认","pending")}${r.confidence!=null?f("识别置信度",Math.round(+r.confidence*100)+"%","confidence"):""}${f("收据",r.rc?"有（见下方）":r.hasAtt?"有（尚未上传）":"无","attachment")}${(()=>{try{const t=r.updated_at&&!isNaN(Date.parse(r.updated_at))?tokyo(r.updated_at):null;return t?f("更新于",esc(t.d+" "+t.hm),"updated"):""}catch{return ""}})()}${f("编号",'<span class="num" style="font-size:13px;color:var(--sub)">'+esc(r.id)+'</span>',"id")}</div>
   ${isPend(r)?'<div class="readonly">这笔还没确认。需要改的话，告诉记账管家。</div>':""}</div></div>`}
-const openEntry=(id,force)=>{const r=E.find(x=>x.id===id);if(!r)return;if(route()==="list")selId=id;if(!force&&isWide()&&route()==="list"){layout();document.querySelectorAll("#res .row.sel").forEach(x=>x.classList.remove("sel"));const rw=document.querySelector(`#res .row[data-id="${CSS.escape(id)}"]`);if(rw)rw.classList.add("sel");return}rcRevoke();$("#overlay").innerHTML=entrySheet(r);document.body.style.overflow="hidden";rcLoad()};
-const closeEntry=()=>{const inPane=!!$("#pane #entry");rcRevoke();$("#overlay").innerHTML="";document.body.style.overflow="";if(inPane||!isWide()){selId=null;document.querySelectorAll("#res .row.sel").forEach(x=>x.classList.remove("sel"))}if(inPane)layout()};
+const openEntry=(id,force,vt)=>{const r=E.find(x=>x.id===id);if(!r)return;if(route()==="list")selId=id;if(!force&&isWide()&&route()==="list"){layout();document.querySelectorAll("#res .row.sel").forEach(x=>x.classList.remove("sel"));const rw=document.querySelector(`#res .row[data-id="${CSS.escape(id)}"]`);if(rw)rw.classList.add("sel");return}const was=!!$("#overlay").innerHTML;rcRevoke();$("#overlay").innerHTML=entrySheet(r);document.body.style.overflow="hidden";if(!vt&&!was)sheetIn($("#overlay"));rcLoad()};
+const closeEntry=()=>{const inPane=!!$("#pane #entry");rcRevoke();ghostOut($("#overlay"));$("#overlay").innerHTML="";document.body.style.overflow="";if(inPane||!isWide()){selId=null;document.querySelectorAll("#res .row.sel").forEach(x=>x.classList.remove("sel"))}if(inPane)layout()};
 // ---- encrypted receipts: data/r/<id>.bin = iv(12) || AES-GCM(ct||tag), AAD = id, same key as the ledger. Decrypted bytes live only in blob: URLs, all revoked on close/lock.
 const BLOBS=new Set();let rcGen=0;
 function rcRevoke(){rcGen++;BLOBS.forEach(u=>URL.revokeObjectURL(u));BLOBS.clear();const v=$("#rviewer");if(v)v.remove();document.querySelectorAll("#entry .rc img").forEach(i=>i.removeAttribute("src"))}
@@ -257,23 +257,55 @@ const segs2=()=>{try{const s=window.viewport&&window.viewport.segments;return !!
 const isWide=()=>WIDEQ.matches||segs2();let selId=null;
 function paneHTML(){const r=selId&&E.find(x=>x.id===selId);return r?entrySheet(r).replace('<div class="dim" data-eclose="1"></div>','').replace('class="sheet" id="entry"','class="pane-in" id="entry"'):`<div class="pane-empty" id="pane-empty">选择一笔账目查看详情</div>`}
 function layout(){const w=isWide()&&route()==="list"&&!document.body.classList.contains("locked");document.body.classList.toggle("two-pane",w);document.body.classList.toggle("segmented",w&&segs2());
- const p=$("#pane");if(!p)return;if(w){if($("#overlay #entry")){closeEntry()}const k=selId+"|"+sig;if(p.dataset.k!==k||!p.innerHTML){rcRevoke();p.innerHTML=paneHTML();p.dataset.k=k;rcLoad()}}else{if(p.innerHTML){rcRevoke();p.innerHTML=""}delete p.dataset.k;if(selId&&route()==="list"&&!$("#overlay").innerHTML&&isWide()===false&&layout.was)openEntry(selId,true)}layout.was=w}
+ const p=$("#pane");if(!p)return;if(w){if($("#overlay #entry")){closeEntry()}const k=selId+"|"+sig;if(p.dataset.k!==k||!p.innerHTML){rcRevoke();p.innerHTML=paneHTML();p.dataset.k=k;if(selId)mv(p.querySelector("#entry"),[{opacity:0,transform:"translateX(12px)"},{opacity:1,transform:"none"}],{d:280});rcLoad()}}else{if(p.innerHTML){rcRevoke();p.innerHTML=""}delete p.dataset.k;if(selId&&route()==="list"&&!$("#overlay").innerHTML&&isWide()===false&&layout.was)openEntry(selId,true)}layout.was=w}
 WIDEQ.addEventListener?WIDEQ.addEventListener("change",layout):WIDEQ.addListener(layout);window.addEventListener("resize",layout);
 try{window.viewport&&window.viewport.addEventListener&&window.viewport.addEventListener("segmentschange",layout)}catch{}
+// ---- motion (B5): Apple-style springs, transform/opacity only, 200–400 ms. will-change only while running; nothing transformed at rest.
+// Reduced motion → opacity-only (or nothing). Sheets/cards animate in #overlay/#sheet/#pane (outside #app, NF-33); exits use an inert, id-less ghost.
+const SPR=CSS.supports("animation-timing-function","linear(0, 1)")?"linear(0, 0.096 2.4%, 0.33 6.2%, 0.62 11%, 0.84 16.5%, 0.96 22%, 1.02 28.5%, 1.03 35%, 1.015 45%, 1.004 58%, 1)":"cubic-bezier(.2,.9,.25,1)";
+const MV={list:false,unlock:false,period:false};
+function mv(el,kf,o={}){if(!el||!el.animate)return null;let k=kf,e=o.e||SPR;if(RM.matches){k=o.rm===undefined?kf.map(f=>"opacity" in f?{opacity:f.opacity}:{}):o.rm;if(!k||!k.some(f=>"opacity" in f))return null;e="linear"}
+ const d=Math.max(200,Math.min(400,o.d||300));el.style.willChange=RM.matches?"opacity":"transform, opacity";el.__mv=(el.__mv||0)+1;
+ const a=el.animate(k,{duration:d,delay:o.delay||0,easing:e,fill:"backwards"});const done=()=>{if(--el.__mv<=0){el.__mv=0;el.style.willChange="";if(!el.getAttribute("style"))el.removeAttribute("style")}};a.finished.then(done,done);return a}
+const pageIn=()=>mv($("#app"),[{opacity:0,transform:"translateY(8px)"},{opacity:1,transform:"none"}],{d:280});
+function sheetIn(host){if(!host)return;mv(host.querySelector(".dim"),[{opacity:0},{opacity:1}],{d:240,e:"linear"});mv(host.querySelector(".sheet"),[{transform:"translateY(100%)"},{transform:"none"}],{d:380,rm:[{opacity:0},{opacity:1}]})}
+function ghostOut(host){if(!host||!host.innerHTML)return;const g=document.createElement("div");g.className="mv-ghost";g.setAttribute("aria-hidden","true");g.inert=true;g.innerHTML=host.innerHTML;
+ g.querySelectorAll("[id]").forEach(x=>x.removeAttribute("id"));g.querySelectorAll("img").forEach(x=>x.removeAttribute("src"));document.body.appendChild(g);
+ const as=[mv(g.querySelector(".dim"),[{opacity:1},{opacity:0}],{d:220,e:"linear"}),mv(g.querySelector(".sheet"),[{transform:"none"},{transform:"translateY(100%)"}],{d:260,e:"cubic-bezier(.4,0,.9,.6)",rm:[{opacity:1},{opacity:0}]})].filter(Boolean);
+ if(!as.length)return g.remove();Promise.all(as.map(a=>a.finished.catch(()=>{}))).then(()=>g.remove())}
+const ghostsClear=()=>document.querySelectorAll(".mv-ghost").forEach(g=>g.remove());
+function chartsIn(again){const st0=again?4:12;
+ document.querySelectorAll("#heat .hm-c").forEach((c,j)=>mv(c,[{opacity:0,transform:"scale(.86)"},{opacity:1,transform:"none"}],{d:260,delay:Math.min(j*st0,240)}));
+ document.querySelectorAll("#tr-svg .tr-bar").forEach((g,j)=>{g.style.transformBox="fill-box";g.style.transformOrigin="50% 100%";mv(g,[{transform:"scaleY(0)"},{transform:"none"}],{d:380,delay:j*(again?15:35),rm:null})});
+ document.querySelectorAll(".ring svg circle").forEach((c,j)=>{c.style.transformBox="fill-box";c.style.transformOrigin="center";mv(c,[{opacity:0,transform:"scale(.92)"},{opacity:1,transform:"none"}],{d:320,delay:j*(again?15:40)})})}
+function listIn(){const rows=[...document.querySelectorAll("#res .row[data-id]")].slice(0,14);rows.forEach((r,j)=>mv(r,[{opacity:0,transform:"translateY(6px)"},{opacity:1,transform:"none"}],{d:280,delay:j*18}))}
+function afterRender(k,changed){if(changed&&(lastRouteWas||MV.unlock))pageIn();MV.unlock=false;
+ if(changed||MV.period)chartsIn(MV.period&&!changed);MV.period=false;if(k==="list"&&!MV.list&&document.querySelector("#res .row[data-id]")){MV.list=true;listIn()}}
+let lastRouteWas="";
+// detail card: expands from the tapped row via View Transitions when available (transform/opacity keyframes on the snapshot), else a spring sheet.
+function openFromRow(id,row){const vtOK=typeof document.startViewTransition==="function"&&!RM.matches&&row&&!(isWide()&&route()==="list");
+ if(!vtOK)return openEntry(id);const r=row.getBoundingClientRect();row.style.viewTransitionName="ecard";
+ let vt;try{vt=document.startViewTransition(()=>{row.style.viewTransitionName="";openEntry(id,false,true);const sh=$("#overlay .sheet");if(sh)sh.style.viewTransitionName="ecard"})}catch{row.style.viewTransitionName="";return openEntry(id)}
+ vt.ready.then(()=>{const sh=$("#overlay .sheet");if(!sh)return;const R2=sh.getBoundingClientRect();
+  document.documentElement.animate([{transform:`translate(${r.left-R2.left}px,${r.top-R2.top}px) scale(${r.width/R2.width},${r.height/R2.height})`,opacity:.6},{transform:"none",opacity:1}],{duration:340,easing:SPR,pseudoElement:"::view-transition-new(ecard)"})}).catch(()=>{});
+ vt.finished.finally(()=>{const sh=$("#overlay .sheet");if(sh)sh.style.viewTransitionName="";if(row.isConnected)row.style.viewTransitionName=""})}
+function unlockOut(){const u=$("#unlock");if(!u)return;const g=document.createElement("div");g.className="mv-ghost mv-unlock";g.setAttribute("aria-hidden","true");g.inert=true;g.appendChild(u.cloneNode(true));
+ g.querySelectorAll("[id]").forEach(x=>x.removeAttribute("id"));g.querySelectorAll("input").forEach(x=>x.value="");document.body.appendChild(g);MV.unlock=true;
+ const a=mv(g,[{opacity:1,transform:"none"},{opacity:0,transform:"scale(1.04)"}],{d:300,e:"cubic-bezier(.3,0,.2,1)"});if(!a)return g.remove();a.finished.then(()=>g.remove(),()=>g.remove())}
 // ---- router
 const ROUTES={home,list,subs,budget,report};const route=()=>location.hash.replace(/^#\/?/,"").split("?")[0]||"home";
 let lastRoute="";
-function render(){if(route()==="pending"){history.replaceState(null,"","#/subs")}const k=route(),fn=ROUTES[k]||home;if(k!==lastRoute&&$("#overlay").innerHTML){closeEntry()}lastRoute=k;if(k!=="list")$("#sheet").innerHTML="";
+function render(){if(route()==="pending"){history.replaceState(null,"","#/subs")}const k=route(),fn=ROUTES[k]||home,changed=k!==lastRoute;lastRouteWas=lastRoute;if(k!==lastRoute&&$("#overlay").innerHTML){closeEntry()}lastRoute=k;if(k!=="list")$("#sheet").innerHTML="";
  $("#app").innerHTML=fn();const tk=k==="budget"?"home":k;document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.r===tk));
- subBadge();if(k==="list")listRes();trendScroll();layout()}
+ subBadge();if(k==="list")listRes();trendScroll();layout();afterRender(k,changed)}
 const go=()=>{render();window.scrollTo(0,0)};
 document.addEventListener("input",e=>{if(e.target.id==="q"){st.q=e.target.value;listRes()}});
 document.addEventListener("change",e=>{const f=e.target.dataset.f;if(f&&e.target.tagName==="SELECT"){st[f]=e.target.value;listRes()}});
-function shiftPeriod(d){if(rmode==="m"||route()!=="report"){const n=shiftYM(rym,d);if(d>0&&n>mxYM())return false;rym=n}else{const n=String(+ryr+d);if(d>0&&n>mxYM().slice(0,4))return false;ryr=n}render();return true}
+function shiftPeriod(d){if(rmode==="m"||route()!=="report"){const n=shiftYM(rym,d);if(d>0&&n>mxYM())return false;rym=n}else{const n=String(+ryr+d);if(d>0&&n>mxYM().slice(0,4))return false;ryr=n}const b=numsBefore();MV.period=true;render();animateNums(b);return true}
 document.addEventListener("click",e=>{const mb=e.target.closest("[data-more]");if(mb){const k=mb.dataset.more,y=scrollY;lim[k]+=PAGE;listRes(true);scrollTo(0,y);return}
  const b=e.target.closest("[data-m],[data-p],[data-now],[data-open],[data-close],[data-clr],[data-pend],[data-reset],[data-type],[data-cat],[data-drill],[data-refresh],[data-retry],[data-qclr],[data-eclose],[data-id],#newbar");if(!b)return;const d=b.dataset;
  if(b.id==="newbar")return applyPending();
- if(d.refresh!=null)return refresh();if(d.retry!=null)return boot();if(d.eclose!=null)return closeEntry();if(d.id!=null)return openEntry(d.id);
+ if(d.refresh!=null)return refresh();if(d.retry!=null)return boot();if(d.eclose!=null)return closeEntry();if(d.id!=null)return openFromRow(d.id,b.closest("#res .row,.row"));
  if(d.m){rmode=d.m;render()}else if(d.p){shiftPeriod(+d.p)}else if(d.now){rym=nowYM();ryr=rym.slice(0,4);render()}
  else if(d.drill!=null){Object.assign(st,{q:"",day:"",type:"expense",category:d.drill,account:"",currency:"",pend:false,month:rmode==="m"?rym:""})}
  else if(d.qclr!=null){e.preventDefault();st.q="";const q=$("#q");q.value="";listRes();q.focus()}
@@ -298,7 +330,7 @@ class Locked extends Error{}
 async function currentKey(){if(KEY)return KEY;const k=await keyLoad();if(k&&k.key)KEY=k;return KEY}
 async function openEnc(enc){const K=await currentKey();if(!K)throw new Locked("locked");
  try{return await decryptWith(K,enc)}catch(e){KEY=null;await keyClear();throw new Locked("key no longer works")}}   // e.g. password changed
-function wipe(){rcRevoke();selId=null;{const p=$("#pane");if(p){p.innerHTML="";delete p.dataset.k}}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;lim.list=PAGE;Object.assign(st,{q:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
+function wipe(){rcRevoke();ghostsClear();MV.list=false;selId=null;{const p=$("#pane");if(p){p.innerHTML="";delete p.dataset.k}}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;lim.list=PAGE;Object.assign(st,{q:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
  ["#app","#overlay","#sheet"].forEach(q=>{const el=$(q);if(el)el.innerHTML=""});const t=$("#toast");if(t){t.textContent="";t.classList.remove("show")}
  const nb=$("#newbar");if(nb)nb.hidden=true;const c=$("#pcnt");if(c){c.hidden=true;c.textContent=""}document.body.style.overflow=""}
 async function lock(){KEY=null;wipe();await keyClear();showUnlock()}
@@ -312,7 +344,7 @@ document.addEventListener("submit",async e=>{if(e.target.id!=="ul-form")return;e
  let enc;try{const r=await fetch(ENC.ledger+"?t="+Date.now(),{cache:"no-store"});if(!r.ok)throw new Error("HTTP "+r.status);enc=await r.json()}
  catch(err){btn.disabled=false;btn.textContent="解锁";$("#ul-err").textContent="连不上网络，暂时无法解锁";return}   // fetch/offline/HTTP/unreadable file: never "wrong password"
  try{
-  const K=await deriveKey(pw,enc);await decryptWith(K,enc);KEY=K;if($("#ul-rem").checked)await keySave(K);else await keyClear();document.body.classList.remove("locked");boot()}
+  const K=await deriveKey(pw,enc);await decryptWith(K,enc);KEY=K;if($("#ul-rem").checked)await keySave(K);else await keyClear();unlockOut();document.body.classList.remove("locked");boot()}
  catch(err){btn.disabled=false;btn.textContent="解锁";const i=$("#ul-pw");
   if(!(err&&err.name==="OperationError")){$("#ul-err").textContent="数据文件无法读取，请稍后再试";return}   // only an AES-GCM auth failure means a wrong password
   i.value="";$("#ul-err").textContent="密码不正确";box.classList.remove("shake");void box.offsetWidth;box.classList.add("shake");try{navigator.vibrate&&navigator.vibrate([20,40,20])}catch{}i.focus()}});
@@ -329,8 +361,9 @@ let toastT;function toast(t){const el=$("#toast");el.textContent=t;el.classList.
 const NUMS=["t-ex","t-inc","t-bal","r-ex","r-inc","r-bal"];
 function animateNums(before){if(RM.matches)return;const els=NUMS.map(id=>document.getElementById(id)).filter(el=>el&&before[el.id]!=null);
  const to=els.map(el=>parseFloat(el.textContent.replace(/[^\d.\-]/g,""))||0),from=els.map(el=>before[el.id]);if(!els.length||to.every((v,i)=>v===from[i]))return;
- const t0=performance.now();document.body.dataset.anim="1";const step=t=>{const k=Math.min(1,(t-t0)/400),e=1-Math.pow(1-k,3);els.forEach((el,i)=>el.textContent=fmt(Math.round(from[i]+(to[i]-from[i])*e)));if(k<1)requestAnimationFrame(step);else delete document.body.dataset.anim};requestAnimationFrame(step)}
-function rerender(){const before={};NUMS.forEach(id=>{const el=document.getElementById(id);if(el)before[id]=parseFloat(el.textContent.replace(/[^\d.\-]/g,""))||0});const y=scrollY;render();scrollTo(0,y);animateNums(before)}
+ const t0=performance.now();document.body.dataset.anim="1";const step=t=>{const k=Math.min(1,(t-t0)/360),e=1-Math.pow(1-k,3);els.forEach((el,i)=>el.textContent=fmt(Math.round(from[i]+(to[i]-from[i])*e)));if(k<1)requestAnimationFrame(step);else delete document.body.dataset.anim};requestAnimationFrame(step)}
+function numsBefore(){const before={};NUMS.forEach(id=>{const el=document.getElementById(id);if(el)before[id]=parseFloat(el.textContent.replace(/[^\d.\-]/g,""))||0});return before}
+function rerender(){const before=numsBefore();const y=scrollY;render();scrollTo(0,y);animateNums(before)}
 function setBusy(v){busy=v;document.querySelectorAll(".rbtn").forEach(b=>b.classList.toggle("spin",v));$("#ptr").classList.toggle("spin",v)}
 
 async function refresh(){if(busy)return;setBusy(true);const old=new Set(E.map(r=>r.id));

@@ -34,3 +34,5 @@ receipts/
 test_b4b.py
 mk_receipt_fixture.py
 test_statusbar.py
+test_b5.py
+rec_b5.py
