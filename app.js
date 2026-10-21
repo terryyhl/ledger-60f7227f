@@ -238,10 +238,16 @@ document.addEventListener("change",e=>{if(e.target.id!=="st-online")return;try{l
 // ---- 打车最常去的地方: ride entries (Uber/taxi, 交通/打车; never food delivery), destination = B of "A→B" in note/summary
 const RIDE_CAT=new Set(["交通","打车"]),RIDE_KW=/uber|taxi|タクシー|出租|打车|滴滴|didi|lyft|grab|s\.ride|go\s*taxi/i,EATS_KW=/eats|外卖|出前|デリバリー|deliver|wolt|饿了么|美团|menu/i;
 const isRide=r=>r.type==="expense"&&!r.deleted&&RIDE_CAT.has(r.category)&&!EATS_KW.test((r.payee||"")+" "+(r.note||""))&&(r.category==="打车"||RIDE_KW.test((r.payee||"")+" "+(r.note||"")));
-// accepted arrows: → ⟶ ➝ ➔ ➜ ➞ ⇒ -> => －＞ (NOT ～ ~ 到 至 or a bare dash: ambiguous, see release notes)
+// accepted arrows: → ⟶ ➝ ➔ ➜ ➞ ⇒ -> => －＞ (also route-like 「到」, see daoDest; NOT ～ ~ 至 or a bare dash)
 const ARROW=/\s*(?:→|⟶|➝|➔|➜|➞|⇒|-+>|=>|－＞)\s*/;
-function rideDest(r){for(const t of [r.note,r.summary]){if(!t||typeof t!=="string")continue;const parts=t.split(ARROW);if(parts.length<2||!parts[parts.length-2].trim())continue;
- const d=parts[parts.length-1].split(/[；;，,。（(\n|｜]/)[0].trim();if(d)return d}return null}
+// 「到」 routes: "A到B", "到 B", "打车：到 X". Not route-like: 到账/到期/到货/到手/到位, 收到/得到/做到/想到/遇到/见到/感到/拿到/接到/找到/听到/看到
+const DAO_NEXT=/[账期货手位]/,DAO_PREV=/[收得做想遇见感拿接找听看]/,CUT=/[；;，,。（(\n|｜]/;
+const normDest=d=>d.replace(/\s+/g," ").trim();
+function daoDest(t){let out=null;for(let i=t.indexOf("到");i>=0;i=t.indexOf("到",i+1)){if(DAO_NEXT.test(t[i+1]||"")||DAO_PREV.test(t[i-1]||""))continue;
+ const d=normDest(t.slice(i+1).replace(/^[\s：:]+/,"").split(CUT)[0]);if(d)out=d}return out}   // last route-like 到 wins (multi-leg → final stop, like arrows)
+function rideDest(r){for(const t of [r.note,r.summary]){if(!t||typeof t!=="string")continue;const parts=t.split(ARROW);
+ if(parts.length>=2&&parts[parts.length-2].trim()){const d=normDest(parts[parts.length-1].split(CUT)[0]);if(d)return d;continue}
+ const d=daoDest(t);if(d)return d}return null}
 function rideStats(ym){const rs=E.filter(r=>r.ym===ym&&r.currency===BASE&&isRide(r)),by={};let miss=0;
  rs.forEach(r=>{const d=rideDest(r);if(!d){miss++;return}const o=by[d]||(by[d]={dest:d,n:0,amt:0,last:""});o.n++;o.amt+=r.amount;if(r.d>o.last)o.last=r.d});
  return {top:Object.values(by).sort((x,y)=>y.n-x.n||y.amt-x.amt||y.last.localeCompare(x.last)||x.dest.localeCompare(y.dest)).slice(0,3),miss,total:rs.length}}
