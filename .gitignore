@@ -38,3 +38,6 @@ test_b5.py
 rec_b5.py
 test_b6a.py
 test_b6b.py
+test_b7a.py
+test_b7b.py
+test_b7_repro.py

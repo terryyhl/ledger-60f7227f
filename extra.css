@@ -191,7 +191,8 @@ html{background:var(--bg)}
 .st-rk{color:var(--sub);font-size:15px;text-align:center}
 .st-m{min-width:0;display:flex;flex-direction:column;align-items:flex-start}
 .st-name{min-width:44px;border:0;background:none;font:inherit;font-size:17px;color:var(--ink);padding:0;min-height:44px;text-align:left;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
-.st-addr{font-size:13px;color:var(--blue);text-decoration:none;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:-10px;padding:2px 0 10px;min-height:28px}
+.st-addr{font-size:13px;color:var(--blue);text-decoration:none;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;min-height:44px;line-height:1.2}
+.st-addr>*{overflow:hidden;text-overflow:ellipsis}
 .st-addr.sub{color:var(--sub)}
 .st-v{display:flex;flex-direction:column;align-items:flex-end}.st-v b{font-size:17px}.st-v small{font-size:13px;color:var(--sub)}
 .st-empty{color:var(--sub);font-size:15px;padding:12px 0;text-align:center}
@@ -210,3 +211,7 @@ html{background:var(--bg)}
 .pg-i{font-size:15px;color:var(--sub)}
 .pg-b:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 @media (prefers-reduced-motion:no-preference){.pg-b{transition:transform .2s var(--spr)}.pg-b:not(:disabled):active{transform:scale(.96)}}
+/* B7: stores skeleton until merchants resolve (static: no shimmer, so nothing to reduce) */
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.st-sk i{display:block;height:44px;margin:12px 0;border-radius:10px;background:var(--fill);opacity:.6}
+.st-sk i:nth-child(2){width:82%}.st-sk i:nth-child(3){width:64%}

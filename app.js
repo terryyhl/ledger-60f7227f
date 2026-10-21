@@ -64,9 +64,9 @@ function budget(){const ym=rym,m=base(E.filter(r=>r.ym===ym&&r.type==="expense")
  return `<div class="row bud" data-bcat="${esc(c)}" data-used="${u}" style="padding:12px 16px;gap:12px"><span class="badge" style="background:${colorOf(c)}">${esc(c.slice(0,1))}</span><div class="m" style="padding:0"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>${esc(c)}</span><span class="sub num" style="font-size:15px">${fmt(u)} / ${fmt(v)} · ${(p*100).toFixed(1)}%${u>v?` 超支 ${fmt(u-v)}`:""}</span></div>${track(p)}</div></div>`}).join("")}</div>`:""}
  <div class="sf">超出预算显示红色，达到 70% 显示橙色。预算由记账管家设置，只统计 ${BASE} 支出。</div></div>`}
 // ---- list + filter sheet
-const st={q:"",payee:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false};let sheet=false;
+const st={q:"",payee:"",scope:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false};let sheet=false;
 const uniq=k=>[...new Set(E.map(r=>r[k]).filter(Boolean))].sort();
-function filtered(){const q=st.q.trim().toLowerCase();return sorted(E.filter(r=>(!st.payee||r.payee===st.payee)&&(!st.month||r.ym===st.month)&&(!st.day||r.d===st.day)&&(!st.type||r.type===st.type)&&(!st.category||r.category===st.category)&&(!st.account||r.account===st.account)&&(!st.currency||r.currency===st.currency)&&(!st.pend||isPend(r))
+function filtered(){const q=st.q.trim().toLowerCase();return sorted(E.filter(r=>(!st.payee||r.payee===st.payee)&&(st.scope!=="store"||!STORE_SKIP.has(r.category))&&(!st.month||r.ym===st.month)&&(!st.day||r.d===st.day)&&(!st.type||r.type===st.type)&&(!st.category||r.category===st.category)&&(!st.account||r.account===st.account)&&(!st.currency||r.currency===st.currency)&&(!st.pend||isPend(r))
  &&qMatch(r,q)))}
 // search: space-separated tokens, all must match. A token matches the payee / note / category / account text, or the amount:
 // "2900" "¥2,900" "2,900円" = amount equals (text containing the digits also matches); ">5000" "<=1000" "1000-3000" = amount range.
@@ -82,7 +82,7 @@ const anyF=()=>st.q||st.payee||st.day||st.month||st.type||st.category||st.accoun
 function chip(k,label,val){return val?`<button class="chip on" data-clr="${k}">${esc(val)} <span class="x">✕</span></button>`:`<button class="chip dd" data-open="1">${label}</button>`}
 function list(){return navbar("明细","",`<div class="search-hit"><label class="search"><span class="mag"></span><input id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="搜索商户、备注、金额或分类" value="${esc(st.q)}"><button class="qclr" data-qclr="1" aria-label="清除搜索"${st.q?"":" hidden"}>✕</button></label></div>
  <div class="chips" id="chips"></div>`)+`<div id="res"></div>`}
-function chipsHTML(){return (st.payee?`<button class="chip on" data-clr="payee" id="chip-payee">${esc(st.payee)} <span class="x">✕</span></button>`:"")+(st.day?`<button class="chip on" data-clr="day" id="chip-day">${esc(dlabel(st.day))} <span class="x">✕</span></button>`:chip("month","月份",st.month&&mlabel(st.month)))+chip("type","类型",TYPE[st.type])+chip("category","分类",st.category)+chip("account","账户",st.account)+chip("currency","币种",st.currency)+`<button class="chip ${st.pend?"on":""}" data-pend="1">待确认</button>`}
+function chipsHTML(){return (st.payee?`<button class="chip on" data-clr="payee" id="chip-payee">${esc(st.payee)}${st.scope==="store"?" · 不含家政/买菜/订阅":""} <span class="x">✕</span></button>`:"")+(st.day?`<button class="chip on" data-clr="day" id="chip-day">${esc(dlabel(st.day))} <span class="x">✕</span></button>`:chip("month","月份",st.month&&mlabel(st.month)))+chip("type","类型",TYPE[st.type])+chip("category","分类",st.category)+chip("account","账户",st.account)+chip("currency","币种",st.currency)+`<button class="chip ${st.pend?"on":""}" data-pend="1">待确认</button>`}
 function listRes(keep){if(keep==="h")pg=hashP();else if(!keep)pg=1;$("#chips").innerHTML=chipsHTML();const qc=$(".qclr");if(qc)qc.hidden=!st.q;const a=filtered(),np=Math.max(1,Math.ceil(a.length/PER));pg=Math.min(Math.max(1,pg),np);
  {const want=pg>1?"#/list?p="+pg:"#/list";if(route()==="list"&&location.hash!==want)history.replaceState(history.state,"",want)}
  $("#res").innerHTML=`<div class="wrap"><div class="sf" style="padding-top:4px"><span id="cnt">${a.length}</span> 笔 · 支出 ${fmt(exOf(a))} · 收入 ${fmt(incOf(a))}</div>${curNote(a)}${a.length?days(a,g=>"支出 "+fmt(exOf(g)),pg*PER,(pg-1)*PER)+pager(pg,np):E.length?
@@ -216,7 +216,7 @@ const subsDue=()=>subItems().filter(x=>daysTo(x.next)<=7).length;
 // ---- 常去的店 (merchants.enc.json: {payee:{address,lat,lng,online}}; undefined = not loaded, null = missing/unreadable → no addresses)
 let MER;const MER_ON="ledger.merch.online";   // localStorage holds only "1"/"0" (include online merchants)
 async function loadMerch(){try{const r=await fetch((TESTPLAIN?"data/merchants.json":ENC.merch)+"?t="+Date.now(),{cache:"no-store"});MER=r.ok?(TESTPLAIN?await r.json():await decryptWith(KEY,await r.json())):null;if(MER&&typeof MER!=="object")MER=null}catch{MER=null}
- if(route()==="home"){const el=$("#stores");if(el)el.outerHTML=storesCard(rym)}}
+ if(route()==="home"){const el=$("#stores");if(el){const busy=el.hasAttribute("aria-busy");el.outerHTML=storesCard(rym);if(busy)mv($("#stores"),[{opacity:.3},{opacity:1}],{d:220})}}}
 const merOnline=()=>{try{return localStorage.getItem(MER_ON)==="1"}catch{return false}};
 const STORE_SKIP=new Set(["家政","买菜","订阅"]);
 function storeStats(ym,withOnline){const m=E.filter(r=>r.ym===ym&&r.type==="expense"&&!r.deleted&&r.currency===BASE&&r.payee&&!STORE_SKIP.has(r.category));const by={};
@@ -226,10 +226,10 @@ function storeStats(ym,withOnline){const m=E.filter(r=>r.ym===ym&&r.type==="expe
  const tie=(x,y)=>y.amt-x.amt||y.last.localeCompare(x.last)||x.payee.localeCompare(y.payee);
  return {visits:[...a].sort((x,y)=>y.visits-x.visits||tie(x,y)).slice(0,3),spend:[...a].sort((x,y)=>tie(x,y)).slice(0,3),hidden:all.length-a.length}}
 const mapURL=(n,i)=>"https://maps.apple.com/?"+(i.lat!=null&&i.lng!=null&&isFinite(+i.lat)&&isFinite(+i.lng)?`q=${encodeURIComponent(n)}&ll=${+i.lat},${+i.lng}`:`address=${encodeURIComponent(i.address)}&q=${encodeURIComponent(n)}`);
-function storeRow(o,rank,kind,ym){const i=o.info,addr=i&&i.address&&!i.online?`<a class="st-addr" href="${esc(mapURL(o.payee,i))}" target="_blank" rel="noopener" aria-label="在地图中打开 ${esc(o.payee)}">${esc(i.address)}</a>`:o.online?`<span class="st-addr sub">线上商户</span>`:"";
+function storeRow(o,rank,kind,ym){const i=o.info,addr=i&&i.address&&!i.online?`<a class="st-addr" href="${esc(mapURL(o.payee,i))}" target="_blank" rel="noopener" aria-label="在地图中打开 ${esc(o.payee)}"><span>${esc(i.address)}</span></a>`:o.online?`<span class="st-addr sub">线上商户</span>`:"";
  return `<div class="st-row" data-payee="${esc(o.payee)}" data-visits="${o.visits}" data-amt="${o.amt}"><span class="st-rk num">${rank}</span><div class="st-m"><button class="st-name" data-jp="${esc(o.payee)}" data-jm="${ym}">${esc(o.payee)}</button>${addr}</div>
  <div class="st-v num"><b>${kind==="v"?o.visits+" 次":fmt(o.amt)}</b><small>${kind==="v"?fmt(o.amt):o.visits+" 次"}</small></div></div>`}
-function storesCard(ym){const on=merOnline(),S=storeStats(ym,on),sw=`<label class="st-tg"><span>包含线上商户</span><input type="checkbox" role="switch" id="st-online"${on?" checked":""}><i aria-hidden="true"></i></label>`;
+function storesCard(ym){if(MER===undefined)return `<div class="card" id="stores" aria-busy="true"><h2>常去的店</h2><div class="st-sk" aria-hidden="true">${"<i></i>".repeat(3)}</div><span class="vh">正在加载商户信息</span></div>`;const on=merOnline(),S=storeStats(ym,on),sw=`<label class="st-tg"><span>包含线上商户</span><input type="checkbox" role="switch" id="st-online"${on?" checked":""}><i aria-hidden="true"></i></label>`;
  const part=(t,a,k,id)=>`<div class="st-part" id="${id}"><div class="st-h">${t}</div>${a.map((o,j)=>storeRow(o,j+1,k,ym)).join("")}</div>`;
  const body=S.visits.length?part("去得最多",S.visits,"v","st-visits")+part("花得最多",S.spend,"s","st-spend"):`<div class="st-empty" id="st-empty">${mlabel(ym)}还没有${on?"":"线下"}常去的店${S.hidden&&!on?`<br><small>${S.hidden} 家线上商户未计入</small>`:""}</div>`;
  return `<div class="card" id="stores"><h2>常去的店<small>${MER===null?"地址暂不可用":"按天计次 · JPY"}</small></h2>${body}${sw}</div>`}
@@ -272,9 +272,9 @@ function mtd(ym){const isNow=ym===nowYM(),n=isNow?+today().slice(8):dimYM(ym),pm
  return `<div class="mtd" id="mtd" data-cur="${cur}" data-prev="${prev}" data-n="${n}" data-pn="${pn}"><div><small>${isNow?`本月至今 1–${n}日`:`${mlabel(ym)} 1–${n}日`}</small><b class="num">${fmt(cur)}</b></div>
  <div><small>上月同期 ${mlabel(pm)} 1–${pn}日${note}</small><b class="num">${fmt(prev)}</b></div>
  <div><small>差额</small><b class="num ${prev&&d>0?"up":prev&&d<0?"down":""}" id="mtd-d">${prev?(d>=0?"+":"-")+fmt(Math.abs(d))+" · "+(d>=0?"+":"")+(d/prev*100).toFixed(1)+"%":"—"}</b></div></div>`}
-function jump(o){Object.assign(st,{q:"",payee:"",type:"",category:"",account:"",currency:"",pend:false,month:"",day:""},o);const q=$("#q");if(q)q.value="";
+function jump(o){Object.assign(st,{q:"",payee:"",scope:"",type:"",category:"",account:"",currency:"",pend:false,month:"",day:""},o);const q=$("#q");if(q)q.value="";
  if(route()==="list"){listRes();scrollTo(0,0)}else location.hash="#/list"}
-document.addEventListener("click",e=>{const p=e.target.closest("[data-jp]");if(p&&!p.closest("#overlay")){e.stopPropagation();return jump({payee:p.dataset.jp,month:p.dataset.jm||"",type:"expense"})}const b=e.target.closest("[data-jd],[data-jc]");if(!b||b.closest("#overlay"))return;e.stopPropagation();const d=b.dataset;
+document.addEventListener("click",e=>{const p=e.target.closest("[data-jp]");if(p&&!p.closest("#overlay")){e.stopPropagation();return jump({payee:p.dataset.jp,month:p.dataset.jm||"",type:"expense",currency:BASE,scope:"store"})}const b=e.target.closest("[data-jd],[data-jc]");if(!b||b.closest("#overlay"))return;e.stopPropagation();const d=b.dataset;
  if(d.jd)jump({day:d.jd,month:d.jd.slice(0,7)});else jump({category:d.jc||"",month:d.jm||"",type:"expense"})},true);
 // ---- foldable / wide: two-pane list + detail. State lives in JS (selId, st, scroll), so resizing/folding never reloads.
 const WIDEQ=matchMedia("(min-width: 600px), (horizontal-viewport-segments: 2)");
@@ -334,10 +334,10 @@ document.addEventListener("click",e=>{const pb=e.target.closest("[data-pg]");if(
  if(b.id==="newbar")return applyPending();
  if(d.refresh!=null)return refresh();if(d.retry!=null)return boot();if(d.eclose!=null)return closeEntry();if(d.id!=null)return openFromRow(d.id,b.closest("#res .row,.row"));
  if(d.m){rmode=d.m;render()}else if(d.p){shiftPeriod(+d.p)}else if(d.now){rym=nowYM();ryr=rym.slice(0,4);render()}
- else if(d.drill!=null){Object.assign(st,{q:"",payee:"",day:"",type:"expense",category:d.drill,account:"",currency:"",pend:false,month:rmode==="m"?rym:""})}
+ else if(d.drill!=null){Object.assign(st,{q:"",payee:"",scope:"",day:"",type:"expense",category:d.drill,account:"",currency:"",pend:false,month:rmode==="m"?rym:""})}
  else if(d.qclr!=null){e.preventDefault();st.q="";const q=$("#q");q.value="";listRes();q.focus()}
- else{if(d.open)sheet=true;if(d.close)sheet=false;if(d.clr){st[d.clr]="";if(d.clr==="day")st.month=""}if(d.pend)st.pend=!st.pend;if(d.type!=null)st.type=d.type;if(d.cat!=null)st.category=st.category===d.cat?"":d.cat;
-  if(d.reset){Object.assign(st,{q:"",payee:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false});const q=$("#q");if(q)q.value=""}listRes()}});
+ else{if(d.open)sheet=true;if(d.close)sheet=false;if(d.clr){st[d.clr]="";if(d.clr==="payee")st.scope="";if(d.clr==="day")st.month=""}if(d.pend)st.pend=!st.pend;if(d.type!=null)st.type=d.type;if(d.cat!=null)st.category=st.category===d.cat?"":d.cat;
+  if(d.reset){Object.assign(st,{q:"",payee:"",scope:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false});const q=$("#q");if(q)q.value=""}listRes()}});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){if($("#rviewer"))return rvClose();closeEntry()}if(e.key==="Enter"&&e.target.dataset&&e.target.dataset.id)openEntry(e.target.dataset.id)});
 window.addEventListener("hashchange",go);
 // ---- encrypted data (AES-256-GCM, PBKDF2-SHA256). Only *.enc.json is published; the derived key is kept in memory,
@@ -357,7 +357,7 @@ class Locked extends Error{}
 async function currentKey(){if(KEY)return KEY;const k=await keyLoad();if(k&&k.key)KEY=k;return KEY}
 async function openEnc(enc){const K=await currentKey();if(!K)throw new Locked("locked");
  try{return await decryptWith(K,enc)}catch(e){KEY=null;await keyClear();throw new Locked("key no longer works")}}   // e.g. password changed
-function wipe(){rcRevoke();ghostsClear();MV.list=false;selId=null;{const p=$("#pane");if(p){p.innerHTML="";delete p.dataset.k}}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;MER=undefined;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;pg=1;Object.assign(st,{q:"",payee:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
+function wipe(){rcRevoke();ghostsClear();MV.list=false;selId=null;{const p=$("#pane");if(p){p.innerHTML="";delete p.dataset.k}}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;MER=undefined;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;pg=1;Object.assign(st,{q:"",payee:"",scope:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
  ["#app","#overlay","#sheet"].forEach(q=>{const el=$(q);if(el)el.innerHTML=""});const t=$("#toast");if(t){t.textContent="";t.classList.remove("show")}
  const nb=$("#newbar");if(nb)nb.hidden=true;const c=$("#pcnt");if(c){c.hidden=true;c.textContent=""}document.body.style.overflow=""}
 async function lock(){KEY=null;wipe();await keyClear();showUnlock()}
