@@ -14,3 +14,4 @@ test_crypto.py
 data/*.json
 !data/*.enc.json
 test_b1.py
+test_b2.py

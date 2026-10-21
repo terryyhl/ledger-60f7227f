@@ -41,7 +41,9 @@ function period(){const isM=rmode==="m"||!location.hash.includes("report"),cur=i
 function home(){const ym=rym,m=E.filter(r=>r.ym===ym),ex=exOf(m),inc=incOf(m),dd=ym===nowYM()?+today().slice(8):ym<nowYM()?new Date(+ym.slice(0,4),+ym.slice(5),0).getDate():1;
  return navbar(`${ym===nowYM()?"本月":mlabel(ym)}概览`)+`<div class="wrap">${period()}
  <div class="summary"><div class="lbl">${mlabel(ym)}支出</div><div class="big num" id="t-ex">${fmt(ex)}</div><div class="three"><div><small>收入</small><b class="num" id="t-inc" style="color:var(--green)">${fmt(inc)}</b></div><div><small>结余</small><b class="num" id="t-bal">${fmt(inc-ex)}</b></div><div><small>日均</small><b class="num">${fmt(Math.round(ex/dd))}</b></div></div></div>${curNote(m)}
+ ${mtd(ym)}
  ${homeSubs()}
+ ${heatmap(ym)}
  ${homeBudget(ym,ex)}
  <div class="sh" style="display:flex;justify-content:space-between"><span>最近 10 笔</span><a class="link" href="#/list" style="text-transform:none;text-decoration:none">全部</a></div>
  ${E.length?`<div class="group ic-rows" id="recent">${sorted(E).slice(0,10).map(txRow).join("")}</div>`:empty('<span class="ti-list" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',"还没有记录","记账管家入账并发布后，记录会显示在这里。")}</div>`}
@@ -59,9 +61,9 @@ function budget(){const ym=rym,m=base(E.filter(r=>r.ym===ym&&r.type==="expense")
  return `<div class="row bud" data-bcat="${esc(c)}" data-used="${u}" style="padding:12px 16px;gap:12px"><span class="badge" style="background:${colorOf(c)}">${esc(c.slice(0,1))}</span><div class="m" style="padding:0"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>${esc(c)}</span><span class="sub num" style="font-size:15px">${fmt(u)} / ${fmt(v)} · ${(p*100).toFixed(1)}%${u>v?` 超支 ${fmt(u-v)}`:""}</span></div>${track(p)}</div></div>`}).join("")}</div>`:""}
  <div class="sf">超出预算显示红色，达到 70% 显示橙色。预算由记账管家设置，只统计 ${BASE} 支出。</div></div>`}
 // ---- list + filter sheet
-const st={q:"",month:"",type:"",category:"",account:"",currency:"",pend:false};let sheet=false;
+const st={q:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false};let sheet=false;
 const uniq=k=>[...new Set(E.map(r=>r[k]).filter(Boolean))].sort();
-function filtered(){const q=st.q.trim().toLowerCase();return sorted(E.filter(r=>(!st.month||r.ym===st.month)&&(!st.type||r.type===st.type)&&(!st.category||r.category===st.category)&&(!st.account||r.account===st.account)&&(!st.currency||r.currency===st.currency)&&(!st.pend||isPend(r))
+function filtered(){const q=st.q.trim().toLowerCase();return sorted(E.filter(r=>(!st.month||r.ym===st.month)&&(!st.day||r.d===st.day)&&(!st.type||r.type===st.type)&&(!st.category||r.category===st.category)&&(!st.account||r.account===st.account)&&(!st.currency||r.currency===st.currency)&&(!st.pend||isPend(r))
  &&qMatch(r,q)))}
 // search: space-separated tokens, all must match. A token matches the payee / note / category / account text, or the amount:
 // "2900" "¥2,900" "2,900円" = amount equals (text containing the digits also matches); ">5000" "<=1000" "1000-3000" = amount range.
@@ -73,11 +75,11 @@ function qTok(r,t){let m;const txt=[r.payee,r.note,r.category,r.account].join(" 
  if(m=t.match(NUMQ)){const n=qNum(m[1]);return Math.abs(r.amount-n)<0.005||txt.includes(m[1])||txt.includes(m[1].replace(/,/g,""))}
  return txt.includes(t)}
 const qMatch=(r,q)=>!q||q.split(/\s+/).filter(Boolean).every(t=>qTok(r,t));
-const anyF=()=>st.q||st.month||st.type||st.category||st.account||st.currency||st.pend;
+const anyF=()=>st.q||st.day||st.month||st.type||st.category||st.account||st.currency||st.pend;
 function chip(k,label,val){return val?`<button class="chip on" data-clr="${k}">${esc(val)} <span class="x">✕</span></button>`:`<button class="chip dd" data-open="1">${label}</button>`}
 function list(){return navbar("明细","",`<div class="search-hit"><label class="search"><span class="mag"></span><input id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="搜索商户、备注、金额或分类" value="${esc(st.q)}"><button class="qclr" data-qclr="1" aria-label="清除搜索"${st.q?"":" hidden"}>✕</button></label></div>
  <div class="chips" id="chips"></div>`)+`<div id="res"></div>`}
-function chipsHTML(){return chip("month","月份",st.month&&mlabel(st.month))+chip("type","类型",TYPE[st.type])+chip("category","分类",st.category)+chip("account","账户",st.account)+chip("currency","币种",st.currency)+`<button class="chip ${st.pend?"on":""}" data-pend="1">待确认</button>`}
+function chipsHTML(){return (st.day?`<button class="chip on" data-clr="day" id="chip-day">${esc(dlabel(st.day))} <span class="x">✕</span></button>`:chip("month","月份",st.month&&mlabel(st.month)))+chip("type","类型",TYPE[st.type])+chip("category","分类",st.category)+chip("account","账户",st.account)+chip("currency","币种",st.currency)+`<button class="chip ${st.pend?"on":""}" data-pend="1">待确认</button>`}
 function listRes(keep){if(!keep)lim.list=PAGE;$("#chips").innerHTML=chipsHTML();const qc=$(".qclr");if(qc)qc.hidden=!st.q;const a=filtered();
  $("#res").innerHTML=`<div class="wrap"><div class="sf" style="padding-top:4px"><span id="cnt">${a.length}</span> 笔 · 支出 ${fmt(exOf(a))} · 收入 ${fmt(incOf(a))}</div>${curNote(a)}${a.length?days(a,g=>"支出 "+fmt(exOf(g)),lim.list)+more("list",a.length):E.length?
  empty('<span class="mag" style="transform:scale(2)"></span>',"没有找到结果",`没有符合${st.q?`“${esc(st.q)}”和`:""}当前筛选的记录。`,'<button class="btn sec" data-reset="1">清除筛选</button>'):
@@ -134,12 +136,13 @@ function trendSVG(T,vis,si){const n=T.ms.length,W=330,H=170,top=8,bot=22,ch=H-to
  let s=`<svg id="tr-svg" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="分类趋势图"><defs>`;
  T.ms.forEach((m,i)=>{const x=i*slot+(slot-bw)/2,h=tot[i]/mx*ch;s+=`<clipPath id="tc${i}"><rect x="${x.toFixed(1)}" y="${(top+ch-h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(5,bw/4).toFixed(1)}"/></clipPath>`});
  s+=`</defs>`;[0,.5,1].forEach(f=>{const y=(top+ch-f*ch).toFixed(1);s+=`<line x1="0" x2="${W-30}" y1="${y}" y2="${y}" style="stroke:var(--sep);stroke-width:${f?.5:1}"${f?' stroke-dasharray="2 3"':""}/>`+(f?`<text x="${W}" y="${(+y+3).toFixed(1)}" text-anchor="end" class="tr-ax">${yen(mx*f)}</text>`:"")});
+ T.ms.forEach((m,i)=>{s+=`<rect data-tm="${i}" class="tr-hit" x="${(i*slot).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${H}" fill="transparent"/>`});   // month hit areas UNDER the segments
  T.ms.forEach((m,i)=>{const x=i*slot+(slot-bw)/2,dim=si!=null&&si!==i;let y=top+ch;
   s+=`<g class="tr-bar" data-m="${m}" data-v="${tot[i]}" opacity="${dim?.35:1}">`;
   if(!tot[i])s+=`<rect class="z" x="${x.toFixed(1)}" y="${(top+ch-3).toFixed(1)}" width="${bw.toFixed(1)}" height="3" rx="1.5" style="fill:var(--fill)"/>`;
-  else{s+=`<g clip-path="url(#tc${i})">`;vis.forEach(c=>{const v=T.val(c,i);if(!v)return;const h=v/mx*ch;y-=h;s+=`<rect data-c="${esc(c)}" data-v="${v}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${(h+.4).toFixed(1)}" style="fill:${colorOf(c)}"/>`});s+=`</g>`}
+  else{s+=`<g clip-path="url(#tc${i})">`;vis.forEach(c=>{const v=T.val(c,i);if(!v)return;const h=v/mx*ch;y-=h;s+=`<rect data-c="${esc(c)}" data-jc="${esc(c)}" data-jm="${m}" data-v="${v}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${(h+.4).toFixed(1)}" style="fill:${colorOf(c)}"/>`});s+=`</g>`}
   s+=`<text x="${(i*slot+slot/2).toFixed(1)}" y="${H-6}" text-anchor="middle" class="tr-ax${si===i?" on":""}">${n>6&&i%2&&i!==n-1&&si!==i?"":+m.slice(5)+"月"}</text>`;
-  s+=`<rect data-tm="${i}" x="${(i*slot).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${H}" fill="transparent"/></g>`});
+  s+=`</g>`});
  return s+`</svg>`}
 function trendCard(){const T=trendData(),vis=T.cats.filter(c=>!TR.off.has(c)),n=T.ms.length;
  if(TR.sel!=null&&TR.sel>=n)TR.sel=null;const si=TR.sel,mi=si==null?n-1:si,m=T.ms[mi];
@@ -166,8 +169,8 @@ function entrySheet(r){const s=r.type==="income"?"+":r.type==="transfer"?"":"-";
  <div style="text-align:center;padding:16px 0 4px"><div class="big num ${r.type==="income"?"in":""}" style="font-size:40px;font-weight:700" data-f="amount">${s}${fmt(r.amount,r.currency)}</div><div class="sub" style="font-size:15px;margin-top:4px">${esc(r.payee||"—")}${isPend(r)?'<span class="tag">待确认</span>':""}</div></div>
  <div class="group" style="margin-top:16px">${f("时间",esc(r.d+" "+r.hm),"time")}${f("类型",TYPE[r.type],"type")}${f("分类",esc(r.category||"—"),"category")}${f("账户",esc(r.account||"—"),"account")}${f("商户",esc(r.payee||"—"),"payee")}${f("备注",esc(r.note||"—"),"note")}${f("来源",esc(SRC[r.source]||r.source||"—"),"source")}${f("币种",esc(r.currency),"currency")}${f("状态",isPend(r)?'<span class="tag" style="margin:0">待确认</span>':"已确认","pending")}${r.confidence!=null?f("识别置信度",Math.round(+r.confidence*100)+"%","confidence"):""}${f("收据",r.hasAtt?"有（暂不显示）":"无","attachment")}${(()=>{try{const t=r.updated_at&&!isNaN(Date.parse(r.updated_at))?tokyo(r.updated_at):null;return t?f("更新于",esc(t.d+" "+t.hm),"updated"):""}catch{return ""}})()}${f("编号",'<span class="num" style="font-size:13px;color:var(--sub)">'+esc(r.id)+'</span>',"id")}</div>
  ${isPend(r)?'<div class="readonly">这笔还没确认。需要改的话，告诉记账管家。</div>':""}</div></div>`}
-const openEntry=id=>{const r=E.find(x=>x.id===id);if(r){$("#overlay").innerHTML=entrySheet(r);document.body.style.overflow="hidden"}};
-const closeEntry=()=>{$("#overlay").innerHTML="";document.body.style.overflow=""};
+const openEntry=(id,force)=>{const r=E.find(x=>x.id===id);if(!r)return;if(route()==="list")selId=id;if(!force&&isWide()&&route()==="list"){layout();document.querySelectorAll("#res .row.sel").forEach(x=>x.classList.remove("sel"));const rw=document.querySelector(`#res .row[data-id="${CSS.escape(id)}"]`);if(rw)rw.classList.add("sel");return}$("#overlay").innerHTML=entrySheet(r);document.body.style.overflow="hidden"};
+const closeEntry=()=>{const inPane=!!$("#pane #entry");$("#overlay").innerHTML="";document.body.style.overflow="";if(inPane||!isWide()){selId=null;document.querySelectorAll("#res .row.sel").forEach(x=>x.classList.remove("sel"))}if(inPane)layout()};
 // ---- 订阅 (read-only, data/subscriptions.json maintained by 记账管家)
 let SUBS;   // undefined = not loaded yet, null = missing/unreadable
 const subsToday=()=>window.__subsToday||today();
@@ -201,12 +204,43 @@ function openSub(i){const it=(SUBS.items||[])[i];if(!it)return;const rows=sorted
  <div class="sub" style="text-align:center;font-size:15px;padding:8px 0 4px">${it.cycle==="yearly"?"年付":"月付"} ${fmt(+it.amount)} · 下次 ${dueLabel(nextCharge(it))}</div>
  <div class="sh" style="padding-left:0">扣费记录（${rows.length}）</div>${rows.length?`<div class="group" id="sub-charges">${rows.map(r=>`<div class="row" data-cid="${esc(r.id)}"><span class="m">${esc(r.d)}</span><span class="sub" style="flex:1">${esc(r.note||"")}</span><span class="num">${fmt(r.amount,r.currency)}</span></div>`).join("")}</div>`:`<div class="readonly" id="sub-none">账本里还没有这项订阅的扣费记录。</div>`}</div></div>`;document.body.style.overflow="hidden"}
 document.addEventListener("click",e=>{const r=e.target.closest("[data-sub]");if(r)openSub(+r.dataset.sub)});
+// ---- batch 2: calendar heatmap, month-to-date, chart → list jumps
+const dimYM=ym=>new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5),0)).getUTCDate();
+const dayEx=ym=>{const o={};for(const r of E)if(r.ym===ym&&r.type==="expense"&&r.currency==="JPY")o[r.d]=(o[r.d]||0)+r.amount;return o};
+function heatLevel(v,mx){if(!v)return 0;const f=v/mx;return f>.75?4:f>.5?3:f>.25?2:1}
+function heatmap(ym){const o=dayEx(ym),n=dimYM(ym),first=new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5)-1,1)).getUTCDay(),td=today(),vals=Object.values(o),mx=Math.max(1,...vals);
+ let cells="";for(let i=0;i<first;i++)cells+=`<span class="hm-pad"></span>`;
+ for(let d=1;d<=n;d++){const ds=`${ym}-${pad(d)}`,v=o[ds]||0,fut=ds>td,lv=fut?0:heatLevel(v,mx);
+  cells+=fut?`<span class="hm-c fut" data-d="${ds}" data-v="0"><i>${d}</i></span>`:`<button class="hm-c l${lv}${ds===td?" td":""}" data-d="${ds}" data-v="${v}" data-jd="${ds}" aria-label="${dlabel(ds)} 支出 ${fmt(v)}"><i>${d}</i></button>`}
+ const top=vals.length?Object.entries(o).sort((a,b)=>b[1]-a[1])[0]:null;
+ return `<div class="card" id="heat"><h2>每日支出<small>${top?`最高 ${+top[0].slice(8)}日 ${fmt(top[1])}`:"本月暂无 JPY 支出"}</small></h2>
+ <div class="hm-wd">${[...WD].map(w=>`<span>${w}</span>`).join("")}</div><div class="hm">${cells}</div>
+ <div class="hm-lg"><span>少</span>${[0,1,2,3,4].map(l=>`<i class="l${l}"></i>`).join("")}<span>多</span><span style="flex:1"></span><span>点日期查看当天明细</span></div></div>`}
+function mtd(ym){const isNow=ym===nowYM(),n=isNow?+today().slice(8):dimYM(ym),pm=shiftYM(ym,-1),pn=Math.min(n,dimYM(pm));
+ const s=(m,k)=>sum(E.filter(r=>r.ym===m&&r.type==="expense"&&r.currency==="JPY"&&+r.d.slice(8)<=k)),cur=s(ym,n),prev=s(pm,pn),d=cur-prev;
+ const note=n>pn?`（上月只有 ${pn} 天）`:"";
+ return `<div class="mtd" id="mtd" data-cur="${cur}" data-prev="${prev}" data-n="${n}" data-pn="${pn}"><div><small>${isNow?`本月至今 1–${n}日`:`${mlabel(ym)} 1–${n}日`}</small><b class="num">${fmt(cur)}</b></div>
+ <div><small>上月同期 ${mlabel(pm)} 1–${pn}日${note}</small><b class="num">${fmt(prev)}</b></div>
+ <div><small>差额</small><b class="num ${prev&&d>0?"up":prev&&d<0?"down":""}" id="mtd-d">${prev?(d>=0?"+":"-")+fmt(Math.abs(d))+" · "+(d>=0?"+":"")+(d/prev*100).toFixed(1)+"%":"—"}</b></div></div>`}
+function jump(o){Object.assign(st,{q:"",type:"",category:"",account:"",currency:"",pend:false,month:"",day:""},o);const q=$("#q");if(q)q.value="";
+ if(route()==="list"){listRes();scrollTo(0,0)}else location.hash="#/list"}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-jd],[data-jc]");if(!b||b.closest("#overlay"))return;e.stopPropagation();const d=b.dataset;
+ if(d.jd)jump({day:d.jd,month:d.jd.slice(0,7)});else jump({category:d.jc,month:d.jm||"",type:"expense"})},true);
+// ---- foldable / wide: two-pane list + detail. State lives in JS (selId, st, scroll), so resizing/folding never reloads.
+const WIDEQ=matchMedia("(min-width: 720px), (horizontal-viewport-segments: 2)");
+const segs2=()=>{try{const s=window.viewport&&window.viewport.segments;return !!(s&&s.length===2&&Math.abs(s[0].top-s[1].top)<1)}catch{return false}};
+const isWide=()=>WIDEQ.matches||segs2();let selId=null;
+function paneHTML(){const r=selId&&E.find(x=>x.id===selId);return r?entrySheet(r).replace('<div class="dim" data-eclose="1"></div>','').replace('class="sheet" id="entry"','class="pane-in" id="entry"'):`<div class="pane-empty" id="pane-empty">选择一笔账目查看详情</div>`}
+function layout(){const w=isWide()&&route()==="list"&&!document.body.classList.contains("locked");document.body.classList.toggle("two-pane",w);document.body.classList.toggle("segmented",w&&segs2());
+ const p=$("#pane");if(!p)return;if(w){if($("#overlay #entry")){closeEntry()}p.innerHTML=paneHTML()}else{p.innerHTML="";if(selId&&route()==="list"&&!$("#overlay").innerHTML&&isWide()===false&&layout.was)openEntry(selId,true)}layout.was=w}
+WIDEQ.addEventListener?WIDEQ.addEventListener("change",layout):WIDEQ.addListener(layout);window.addEventListener("resize",layout);
+try{window.viewport&&window.viewport.addEventListener&&window.viewport.addEventListener("segmentschange",layout)}catch{}
 // ---- router
 const ROUTES={home,list,subs,budget,report};const route=()=>location.hash.replace(/^#\/?/,"").split("?")[0]||"home";
 let lastRoute="";
 function render(){if(route()==="pending"){history.replaceState(null,"","#/subs")}const k=route(),fn=ROUTES[k]||home;if(k!==lastRoute&&$("#overlay").innerHTML){closeEntry()}lastRoute=k;if(k!=="list")$("#sheet").innerHTML="";
  $("#app").innerHTML=fn();const tk=k==="budget"?"home":k;document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.r===tk));
- subBadge();if(k==="list")listRes()}
+ subBadge();if(k==="list")listRes();layout()}
 const go=()=>{render();window.scrollTo(0,0)};
 document.addEventListener("input",e=>{if(e.target.id==="q"){st.q=e.target.value;listRes()}});
 document.addEventListener("change",e=>{const f=e.target.dataset.f;if(f&&e.target.tagName==="SELECT"){st[f]=e.target.value;listRes()}});
@@ -216,10 +250,10 @@ document.addEventListener("click",e=>{const mb=e.target.closest("[data-more]");i
  if(b.id==="newbar")return applyPending();
  if(d.refresh!=null)return refresh();if(d.retry!=null)return boot();if(d.eclose!=null)return closeEntry();if(d.id!=null)return openEntry(d.id);
  if(d.m){rmode=d.m;render()}else if(d.p){shiftPeriod(+d.p)}else if(d.now){rym=nowYM();ryr=rym.slice(0,4);render()}
- else if(d.drill!=null){Object.assign(st,{q:"",type:"expense",category:d.drill,account:"",currency:"",pend:false,month:rmode==="m"?rym:""})}
+ else if(d.drill!=null){Object.assign(st,{q:"",day:"",type:"expense",category:d.drill,account:"",currency:"",pend:false,month:rmode==="m"?rym:""})}
  else if(d.qclr!=null){e.preventDefault();st.q="";const q=$("#q");q.value="";listRes();q.focus()}
- else{if(d.open)sheet=true;if(d.close)sheet=false;if(d.clr)st[d.clr]="";if(d.pend)st.pend=!st.pend;if(d.type!=null)st.type=d.type;if(d.cat!=null)st.category=st.category===d.cat?"":d.cat;
-  if(d.reset){Object.assign(st,{q:"",month:"",type:"",category:"",account:"",currency:"",pend:false});const q=$("#q");if(q)q.value=""}listRes()}});
+ else{if(d.open)sheet=true;if(d.close)sheet=false;if(d.clr){st[d.clr]="";if(d.clr==="day")st.month=""}if(d.pend)st.pend=!st.pend;if(d.type!=null)st.type=d.type;if(d.cat!=null)st.category=st.category===d.cat?"":d.cat;
+  if(d.reset){Object.assign(st,{q:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false});const q=$("#q");if(q)q.value=""}listRes()}});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeEntry();if(e.key==="Enter"&&e.target.dataset&&e.target.dataset.id)openEntry(e.target.dataset.id)});
 window.addEventListener("hashchange",go);
 // ---- encrypted data (AES-256-GCM, PBKDF2-SHA256). Only *.enc.json is published; the derived key is kept in memory,
@@ -239,7 +273,7 @@ class Locked extends Error{}
 async function currentKey(){if(KEY)return KEY;const k=await keyLoad();if(k&&k.key)KEY=k;return KEY}
 async function openEnc(enc){const K=await currentKey();if(!K)throw new Locked("locked");
  try{return await decryptWith(K,enc)}catch(e){KEY=null;await keyClear();throw new Locked("key no longer works")}}   // e.g. password changed
-function wipe(){E=[];BUD=null;SUBS=null;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;lim.list=PAGE;Object.assign(st,{q:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
+function wipe(){selId=null;{const p=$("#pane");if(p)p.innerHTML=""}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;lim.list=PAGE;Object.assign(st,{q:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
  ["#app","#overlay","#sheet"].forEach(q=>{const el=$(q);if(el)el.innerHTML=""});const t=$("#toast");if(t){t.textContent="";t.classList.remove("show")}
  const nb=$("#newbar");if(nb)nb.hidden=true;const c=$("#pcnt");if(c){c.hidden=true;c.textContent=""}document.body.style.overflow=""}
 async function lock(){KEY=null;wipe();await keyClear();showUnlock()}

@@ -103,3 +103,32 @@ body.locked{padding-bottom:0}
 @keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-9px)}40%,60%{transform:translateX(9px)}}
 @media(prefers-reduced-motion:reduce){.shake{animation:none}}
 .lt .lockbtn{width:auto;padding:0 8px;font-size:15px}
+/* batch 2: month-to-date */
+.mtd{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;background:var(--card);border-radius:var(--r-card);padding:12px 16px;margin-top:12px}
+.mtd small{display:block;font-size:12px;color:var(--sub);line-height:1.3;min-height:31px}.mtd b{font-size:17px}
+/* calendar heatmap (Screen Time style) */
+.hm-wd,.hm{display:grid;grid-template-columns:repeat(7,minmax(44px,1fr));gap:2px}
+.hm-wd span{text-align:center;font-size:11px;color:var(--sub);padding-bottom:4px}
+.hm-c{aspect-ratio:1;border:0;border-radius:8px;display:grid;place-items:center;font:inherit;font-size:12px;color:var(--ink);background:var(--fill);padding:0;min-height:44px;min-width:44px}
+.hm-c i{font-style:normal;font-variant-numeric:tabular-nums}
+.hm-c.l1{background:color-mix(in srgb,var(--orange) 28%,var(--card))}.hm-c.l2{background:color-mix(in srgb,var(--orange) 50%,var(--card))}
+.hm-c.l3{background:color-mix(in srgb,var(--orange) 75%,var(--card));color:#fff}.hm-c.l4{background:var(--orange);color:#fff}
+.hm-c.td{box-shadow:inset 0 0 0 2px var(--blue)}.hm-c.fut{opacity:.35;background:transparent;box-shadow:inset 0 0 0 1px var(--sep)}
+.hm-lg{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--sub);margin-top:10px}
+.hm-lg i{width:12px;height:12px;border-radius:3px;background:var(--fill)}
+.hm-lg i.l1{background:color-mix(in srgb,var(--orange) 28%,var(--card))}.hm-lg i.l2{background:color-mix(in srgb,var(--orange) 50%,var(--card))}.hm-lg i.l3{background:color-mix(in srgb,var(--orange) 75%,var(--card))}.hm-lg i.l4{background:var(--orange)}
+#trend rect[data-jc]{cursor:pointer}
+/* two-pane (wide / unfolded foldable): list left, detail right; nothing reloads on resize */
+#pane{display:none}
+body.two-pane #app{margin-right:min(50%,480px)}
+body.two-pane #pane{display:block;position:fixed;top:0;right:0;bottom:calc(49px + env(safe-area-inset-bottom));width:min(50%,480px);overflow:auto;background:var(--bg);border-left:.5px solid var(--sep);padding-top:env(safe-area-inset-top);z-index:15}
+body.two-pane #pane .pane-in{min-height:100%}
+body.two-pane #pane .grab{display:none}
+.pane-empty{height:100%;min-height:300px;display:grid;place-items:center;color:var(--sub);font-size:15px}
+body.two-pane #res .row.sel{background:color-mix(in srgb,var(--blue) 14%,var(--card))}
+/* dual-screen foldables: put the list on the first segment and the detail on the second, avoiding the hinge */
+@media (horizontal-viewport-segments: 2){
+ body.two-pane #app{margin-right:0;width:env(viewport-segment-width 0 0)}
+ body.two-pane #pane{left:env(viewport-segment-left 1 0);width:env(viewport-segment-width 1 0)}
+}
+@media (min-width:720px){.wrap{max-width:760px;margin-left:auto;margin-right:auto}}
