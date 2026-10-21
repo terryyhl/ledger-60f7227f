@@ -45,3 +45,9 @@ darkaudit.py
 b8_repro.js
 test_b8.py
 b8b_repro.js
+test_b9common.py
+test_b9a.py
+test_b9b.py
+test_b9c.py
+test_b9d.py
+test_b9e.py

@@ -44,6 +44,7 @@ function home(){const ym=rym,m=E.filter(r=>r.ym===ym),ex=exOf(m),inc=incOf(m),dd
  return navbar(`${ym===nowYM()?"本月":mlabel(ym)}概览`)+`<div class="wrap">${period()}
  <div class="summary"><div class="lbl">${mlabel(ym)}支出</div><div class="big num" id="t-ex">${fmt(ex)}</div><div class="three"><div><small>收入</small><b class="num" id="t-inc" style="color:var(--green)">${fmt(inc)}</b></div><div><small>结余</small><b class="num" id="t-bal">${fmt(inc-ex)}</b></div><div><small>日均</small><b class="num">${fmt(Math.round(ex/dd))}</b></div></div></div>${curNote(m)}
  ${mtd(ym)}
+ ${insightsCard(ym)}
  ${homeSubs()}
  ${heatmap(ym)}
  ${storesCard(ym)}
@@ -265,6 +266,28 @@ function rideStats(ym){const rs=E.filter(r=>r.ym===ym&&r.currency===BASE&&isRide
 function ridesCard(ym){const R=rideStats(ym);
  const rows=R.top.map((o,j)=>`<button class="rd-row" data-jdest="${esc(o.dest)}" data-jm="${ym}" data-n="${o.n}" data-amt="${o.amt}"><span class="st-rk num">${j+1}</span><span class="rd-d">${esc(o.dest)}</span><span class="st-v num"><b>${o.n} 次</b><small>${fmt(o.amt)}</small></span></button>`).join("");
  return `<div class="card" id="rides"><h2>打车最常去的地方<small>JPY</small></h2>${rows||`<div class="st-empty" id="rd-empty">${mlabel(ym)}没有可识别目的地的打车记录</div>`}${R.miss?`<div class="rd-ex" id="rd-ex">${R.miss} 笔行程未识别目的地，未计入</div>`:""}</div>`}
+// ---- b9 本月洞察: 1–2 sentences, ranked by significance (yen-equivalent), nothing when the data is thin.
+// JPY helper used by all b9 aggregates (b9 FX commit extends it to converted foreign entries)
+const jy=r=>r.currency===BASE?r.amount:null;
+const FIXED=new Set(["家政","订阅"]);   // 固定支出 categories (b9)
+// Thresholds (documented in design notes):
+//  category vs same days last month: category not 固定; ≥2 entries in EACH period; last-month base ≥ ¥3,000; |Δ| ≥ 15% and ≥ ¥2,000
+//  total vs same days last month: ≥5 entries in each period; base ≥ ¥10,000; |Δ| ≥ 10% and ≥ ¥5,000
+//  rides this week (current month only, Mon–today JST): ≥3 rides
+//  score = |Δ| in yen (rides: that week's ride spend); show the top 2 by score
+const INS={cat:{n:2,base:3000,pct:.15,abs:2000},tot:{n:5,base:10000,pct:.10,abs:5000},ride:{n:3}};
+function insights(ym){const isNow=ym===nowYM(),n=isNow?+today().slice(8):dimYM(ym),pm=shiftYM(ym,-1),pn=Math.min(n,dimYM(pm)),out=[];
+ const per=(m,k)=>E.filter(r=>r.ym===m&&r.type==="expense"&&jy(r)!=null&&+r.d.slice(8)<=k);const A=per(ym,n),B=per(pm,pn);
+ const S=a=>a.reduce((s,r)=>s+jy(r),0),pct=(c,p)=>(c>=p?"+":"-")+Math.round(Math.abs(c-p)/p*100)+"%";
+ const ca=groupBy(A,"category"),cb=groupBy(B,"category");
+ for(const c of new Set([...Object.keys(ca),...Object.keys(cb)])){if(FIXED.has(c))continue;const a=ca[c]||[],b=cb[c]||[],x=S(a),y=S(b),d=x-y;
+  if(a.length>=INS.cat.n&&b.length>=INS.cat.n&&y>=INS.cat.base&&Math.abs(d)>=INS.cat.abs&&Math.abs(d)/y>=INS.cat.pct)out.push({k:"cat",c,score:Math.abs(d),t:`${c}比上月同期 ${pct(x,y)}`,m:ym})}
+ {const x=S(A),y=S(B),d=x-y;if(A.length>=INS.tot.n&&B.length>=INS.tot.n&&y>=INS.tot.base&&Math.abs(d)>=INS.tot.abs&&Math.abs(d)/y>=INS.tot.pct)out.push({k:"tot",score:Math.abs(d),t:`${isNow?"本月":mlabel(ym)}支出比上月同期 ${pct(x,y)}`,m:ym})}
+ if(isNow&&typeof isRide==="function"){const td=today(),wd=(new Date(td+"T12:00:00Z").getUTCDay()+6)%7,mon=new Date(Date.parse(td+"T12:00:00Z")-wd*864e5).toISOString().slice(0,10);
+  const rs=E.filter(r=>r.d>=mon&&r.d<=td&&isRide(r));if(rs.length>=INS.ride.n)out.push({k:"ride",score:rs.reduce((s,r)=>s+(jy(r)||0),0),t:`本周打车 ${rs.length} 次`})}
+ return out.sort((a,b)=>b.score-a.score).slice(0,2)}
+function insightsCard(ym){const a=insights(ym);if(!a.length)return "";
+ return `<div class="card ins" id="insights" aria-label="本月洞察"><h2>${ym===nowYM()?"本月洞察":mlabel(ym)+"洞察"}</h2>${a.map(i=>i.k==="cat"?`<button class="ins-r" data-ins="${i.k}" data-jc="${esc(i.c)}" data-jm="${i.m}"><span class="ins-dot" aria-hidden="true"></span><span>${esc(i.t)}</span><b class="chev" aria-hidden="true">›</b></button>`:`<div class="ins-r" data-ins="${i.k}"><span class="ins-dot" aria-hidden="true"></span><span>${esc(i.t)}</span></div>`).join("")}</div>`}
 async function loadSubs(){try{const r=await fetch((TESTPLAIN?"data/subscriptions.json":ENC.subs)+"?t="+Date.now(),{cache:"no-store"});SUBS=r.ok?(TESTPLAIN?await r.json():await decryptWith(KEY,await r.json())):null}catch{SUBS=null}
  if(["home","subs"].includes(route())){const y=scrollY;render();scrollTo(0,y)}else subBadge()}
 function subBadge(){const n=SUBS?subsDue():0,c=$("#pcnt");if(c){c.hidden=!n;c.textContent=n||""}}

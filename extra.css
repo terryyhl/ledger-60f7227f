@@ -222,3 +222,10 @@ html{background:var(--bg)}
 .rd-ex{font-size:13px;color:var(--sub);padding-top:8px;border-top:.5px solid var(--sep)}
 .rd-row:focus-visible{outline:2px solid var(--blue);outline-offset:-2px;border-radius:8px}
 @media (prefers-reduced-motion:no-preference){.rd-row{transition:transform .2s var(--spr)}.rd-row:active{transform:scale(.98)}}
+/* B9: 本月洞察 */
+.ins .ins-r{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:0;border:0;background:none;color:var(--ink);font:inherit;font-size:17px;text-align:left}
+.ins button.ins-r{cursor:pointer}.ins .ins-r+.ins-r{border-top:.5px solid var(--sep)}
+.ins .ins-r>span:nth-child(2){flex:1}
+.ins-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);flex:0 0 8px}
+.ins .chev{color:var(--ter);font-weight:400}
+@media (prefers-reduced-motion:no-preference){.ins button.ins-r{transition:transform .2s var(--spr)}.ins button.ins-r:active{transform:scale(.98)}}
