@@ -15,14 +15,18 @@ function tokyo(dt){dt=String(dt||"");const t=/(Z|[+-]\d\d:?\d\d)$/.test(dt)?Date
 const today=()=>tokyo(new Date().toISOString()).d,nowYM=()=>today().slice(0,7);
 const conf=r=>r.confidence==null||r.confidence===""||isNaN(+r.confidence)?1:+r.confidence;
 const isPend=r=>conf(r)<0.8;
-function norm(r){const t=tokyo(r.datetime);const {attachment,...rest}=r;const rc=rest.receipt,ok=rc&&/^[0-9a-f]{32}$/.test(rc.id)&&/^[0-9a-f]{32}$/.test(rc.thumb);delete rest.receipt;return {...rest,hasAtt:!!attachment||!!ok,rc:ok?{id:rc.id,thumb:rc.thumb,w:+rc.w||0,h:+rc.h||0}:null,amount:Math.abs(+r.amount||0),currency:r.currency||"JPY",d:t.d,ym:t.d.slice(0,7),y:t.d.slice(0,4),hm:t.hm,key:t.d+"T"+t.hm+"|"+r.datetime}}
-const base=a=>a.filter(r=>r.currency===BASE),sum=a=>a.reduce((s,r)=>s+r.amount,0);
+function norm(r){const t=tokyo(r.datetime);const {attachment,...rest}=r;const rc=rest.receipt,ok=rc&&/^[0-9a-f]{32}$/.test(rc.id)&&/^[0-9a-f]{32}$/.test(rc.thumb);delete rest.receipt;return {...rest,hasAtt:!!attachment||!!ok,rc:ok?{id:rc.id,thumb:rc.thumb,w:+rc.w||0,h:+rc.h||0}:null,amount:Math.abs(+r.amount||0),currency:r.currency||"JPY",fx:fxOk(r.fx),d:t.d,ym:t.d.slice(0,7),y:t.d.slice(0,4),hm:t.hm,key:t.d+"T"+t.hm+"|"+r.datetime}}
+// ---- b9 外币折算: per-entry fx {rate, date:"YYYY-MM-DD", src} filled by 记账管家 before encryption; JPY = round(amount × rate).
+// No rate (or an invalid one) → 未折算: excluded from JPY totals, counted in a note, never guessed. The page makes no external calls.
+function fxOk(f){if(!f||typeof f!=="object")return null;const rate=+f.rate;return isFinite(rate)&&rate>0&&/^\d{4}-\d{2}-\d{2}$/.test(f.date||"")&&typeof f.src==="string"&&f.src.trim()?{rate,date:f.date,src:f.src.trim().slice(0,40)}:null}
+const jpyOf=r=>r.currency===BASE?r.amount:r.fx?Math.round(r.amount*r.fx.rate):null;
+const base=a=>a.filter(r=>jpyOf(r)!=null),sum=a=>a.reduce((s,r)=>s+("currency" in r?(jpyOf(r)??0):+r.amount||0),0);
 const exOf=a=>sum(base(a).filter(r=>r.type==="expense")),incOf=a=>sum(base(a).filter(r=>r.type==="income"));
 const groupBy=(a,k)=>a.reduce((o,r)=>((o[r[k]]=o[r[k]]||[]).push(r),o),{});
 const sorted=a=>[...a].sort((x,y)=>y.key<x.key?-1:y.key>x.key?1:0);
 const mlabel=ym=>+ym.slice(5)+"月",dlabel=d=>`${+d.slice(5,7)}月${+d.slice(8)}日 周${WD[new Date(d+"T12:00:00Z").getUTCDay()]}`;
-function curNote(a){const o={};a.filter(r=>r.currency!==BASE&&r.type!=="transfer").forEach(r=>{const c=o[r.currency]=o[r.currency]||{ex:0,inc:0};c[r.type==="income"?"inc":"ex"]+=r.amount});
- const k=Object.keys(o);return k.length?`<div class="cur" id="other-cur">其他币种（单独汇总，不换算，未计入 ${BASE} 合计）：${k.map(c=>`${c} 支出 ${fmt(o[c].ex,c)} · 收入 ${fmt(o[c].inc,c)}`).join("；")}</div>`:""}
+function curNote(a){const o={},un=a.filter(r=>jpyOf(r)==null&&r.type!=="transfer"),cv=a.filter(r=>r.currency!==BASE&&r.fx&&r.type!=="transfer").length;un.forEach(r=>{const c=o[r.currency]=o[r.currency]||{ex:0,inc:0};c[r.type==="income"?"inc":"ex"]+=r.amount});
+ const k=Object.keys(o);return (k.length?`<div class="cur" id="other-cur"><b id="unconv">${un.length} 笔未折算</b> · 其他币种（单独汇总，不换算，未计入 ${BASE} 合计）：${k.map(c=>`${c} 支出 ${fmt(o[c].ex,c)} · 收入 ${fmt(o[c].inc,c)}`).join("；")}</div>`:"")+(cv?`<div class="cur" id="conv-note">${cv} 笔外币已按记账管家提供的汇率折算计入 ${BASE}</div>`:"")}
 function txRow(r){const s=r.type==="income"?"+":r.type==="transfer"?"":"-";
  return `<div class="row tall" role="button" tabindex="0" data-id="${esc(r.id)}"><span class="badge" style="background:${r.type==="transfer"?"var(--gray)":colorOf(r.category)}">${esc((r.type==="transfer"?"转":r.category||"·").slice(0,1))}</span>
  <div class="m"><div class="p">${esc(r.payee||r.category||"—")}${isPend(r)?'<span class="tag">待确认</span>':""}</div><div class="n">${esc([r.hm,r.type==="transfer"?"转账":r.category,r.account].filter(Boolean).join(" · "))}</div></div>
@@ -76,9 +80,9 @@ function budget(){const ym=rym,m=base(E.filter(r=>r.ym===ym&&r.type==="expense")
  return `<div class="row bud" data-bcat="${esc(c)}" data-used="${u}" style="padding:12px 16px;gap:12px"><span class="badge" style="background:${colorOf(c)}">${esc(c.slice(0,1))}</span><div class="m" style="padding:0"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>${esc(c)}</span><span class="sub num" style="font-size:15px">${fmt(u)} / ${fmt(v)} · ${(p*100).toFixed(1)}%${u>v?` 超支 ${fmt(u-v)}`:""}</span></div>${track(p)}</div></div>`}).join("")}</div>`:""}
  <div class="sf">超出预算显示红色，达到 70% 显示橙色。预算由记账管家设置，只统计 ${BASE} 支出。</div></div>`}
 // ---- list + filter sheet
-const st={q:"",payee:"",scope:"",dest:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false};let sheet=false;
+const st={q:"",payee:"",scope:"",dest:"",cv:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false};let sheet=false;
 const uniq=k=>[...new Set(E.map(r=>r[k]).filter(Boolean))].sort();
-function filtered(){const q=st.q.trim().toLowerCase();return sorted(E.filter(r=>(!st.payee||r.payee===st.payee)&&(!st.dest||isRide(r)&&destKey(rideDest(r))===destKey(st.dest))&&(st.scope!=="store"||!STORE_SKIP.has(r.category))&&(!st.month||r.ym===st.month)&&(!st.day||r.d===st.day)&&(!st.type||r.type===st.type)&&(!st.category||r.category===st.category)&&(!st.account||r.account===st.account)&&(!st.currency||r.currency===st.currency)&&(!st.pend||isPend(r))
+function filtered(){const q=st.q.trim().toLowerCase();return sorted(E.filter(r=>(!st.payee||r.payee===st.payee)&&(!st.cv||jpyOf(r)!=null)&&(!st.dest||isRide(r)&&destKey(rideDest(r))===destKey(st.dest))&&(st.scope!=="store"||!STORE_SKIP.has(r.category))&&(!st.month||r.ym===st.month)&&(!st.day||r.d===st.day)&&(!st.type||r.type===st.type)&&(!st.category||r.category===st.category)&&(!st.account||r.account===st.account)&&(!st.currency||r.currency===st.currency)&&(!st.pend||isPend(r))
  &&qMatch(r,q)))}
 // search: space-separated tokens, all must match. A token matches the payee / note / category / account text, or the amount:
 // "2900" "¥2,900" "2,900円" = amount equals (text containing the digits also matches); ">5000" "<=1000" "1000-3000" = amount range.
@@ -90,11 +94,11 @@ function qTok(r,t){let m;const txt=[r.payee,r.note,r.category,r.account].join(" 
  if(m=t.match(NUMQ)){const n=qNum(m[1]);return Math.abs(r.amount-n)<0.005||txt.includes(m[1])||txt.includes(m[1].replace(/,/g,""))}
  return txt.includes(t)}
 const qMatch=(r,q)=>!q||q.split(/\s+/).filter(Boolean).every(t=>qTok(r,t));
-const anyF=()=>st.q||st.payee||st.dest||st.day||st.month||st.type||st.category||st.account||st.currency||st.pend;
+const anyF=()=>st.q||st.payee||st.dest||st.cv||st.day||st.month||st.type||st.category||st.account||st.currency||st.pend;
 function chip(k,label,val){return val?`<button class="chip on" data-clr="${k}">${esc(val)} <span class="x">✕</span></button>`:`<button class="chip dd" data-open="1">${label}</button>`}
 function list(){return navbar("明细","",`<div class="search-hit"><label class="search"><span class="mag"></span><input id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="搜索商户、备注、金额或分类" value="${esc(st.q)}"><button class="qclr" data-qclr="1" aria-label="清除搜索"${st.q?"":" hidden"}>✕</button></label></div>
  <div class="chips" id="chips"></div>`)+`<div id="res"></div>`}
-function chipsHTML(){return (st.dest?`<button class="chip on" data-clr="dest" id="chip-dest">打车去 ${esc(st.dest)} <span class="x">✕</span></button>`:"")+(st.payee?`<button class="chip on" data-clr="payee" id="chip-payee">${esc(st.payee)}${st.scope==="store"?" · 不含家政/买菜/订阅":""} <span class="x">✕</span></button>`:"")+(st.day?`<button class="chip on" data-clr="day" id="chip-day">${esc(dlabel(st.day))} <span class="x">✕</span></button>`:chip("month","月份",st.month&&mlabel(st.month)))+chip("type","类型",TYPE[st.type])+chip("category","分类",st.category)+chip("account","账户",st.account)+chip("currency","币种",st.currency)+`<button class="chip ${st.pend?"on":""}" data-pend="1">待确认</button>`}
+function chipsHTML(){return (st.cv?`<button class="chip on" data-clr="cv" id="chip-cv">${BASE}（含折算） <span class="x">✕</span></button>`:"")+(st.dest?`<button class="chip on" data-clr="dest" id="chip-dest">打车去 ${esc(st.dest)} <span class="x">✕</span></button>`:"")+(st.payee?`<button class="chip on" data-clr="payee" id="chip-payee">${esc(st.payee)}${st.scope==="store"?" · 不含家政/买菜/订阅":""} <span class="x">✕</span></button>`:"")+(st.day?`<button class="chip on" data-clr="day" id="chip-day">${esc(dlabel(st.day))} <span class="x">✕</span></button>`:chip("month","月份",st.month&&mlabel(st.month)))+chip("type","类型",TYPE[st.type])+chip("category","分类",st.category)+chip("account","账户",st.account)+chip("currency","币种",st.currency)+`<button class="chip ${st.pend?"on":""}" data-pend="1">待确认</button>`}
 function listRes(keep){if(keep==="h")pg=hashP();else if(!keep)pg=1;$("#chips").innerHTML=chipsHTML();const qc=$(".qclr");if(qc)qc.hidden=!st.q;const a=filtered(),np=Math.max(1,Math.ceil(a.length/PER));pg=Math.min(Math.max(1,pg),np);
  {const want=pg>1?"#/list?p="+pg:"#/list";if(route()==="list"&&location.hash!==want)history.replaceState(history.state,"",want)}
  $("#res").innerHTML=`<div class="wrap"><div class="sf" style="padding-top:4px"><span id="cnt">${a.length}</span> 笔 · 支出 ${fmt(exOf(a))} · 收入 ${fmt(incOf(a))}</div>${curNote(a)}${a.length?days(a,g=>"支出 "+fmt(exOf(g)),pg*PER,(pg-1)*PER)+pager(pg,np):E.length?
@@ -141,8 +145,8 @@ function trendMonths(range){const end=rmode==="m"?rym:(ryr===nowYM().slice(0,4)?
 function trendData(range=TR.range){const ms=trendMonths(range),idx={};ms.forEach((m,i)=>idx[m]=i);idx[shiftYM(ms[0],-1)]=-1;
  const by={},prev={},other={};
  for(const r of E){if(r.type!=="expense"||r.deleted||!inScope(r,TS))continue;const i=idx[r.ym];if(i===undefined)continue;
-  if(r.currency!=="JPY"){if(i>=0)other[r.currency]=(other[r.currency]||0)+r.amount;continue}
-  const c=r.category||"未分类";if(i<0){prev[c]=(prev[c]||0)+r.amount;continue}(by[c]=by[c]||ms.map(()=>0))[i]+=r.amount}
+  const jv=jpyOf(r);if(jv==null){if(i>=0)other[r.currency]=(other[r.currency]||0)+r.amount;continue}
+  const c=r.category||"未分类";if(i<0){prev[c]=(prev[c]||0)+jv;continue}(by[c]=by[c]||ms.map(()=>0))[i]+=jv}
  const cats=Object.keys(by).sort((a,b)=>sumA(by[b])-sumA(by[a])||a.localeCompare(b));
  const val=(c,i)=>i<0?(prev[c]||0):(by[c]?by[c][i]:0);return {ms,cats,by,prev,other,val}}
 const niceMax=v=>{if(v<=0)return 1;const p=10**Math.floor(Math.log10(v)),f=v/p;return (f<=1?1:f<=2?2:f<=5?5:10)*p};
@@ -176,7 +180,7 @@ function trendCard(){const T=trendData(),vis=T.cats.filter(c=>!TR.off.has(c)),n=
  <div class="seg tr-seg">${segs}</div>${scSeg("trend",TS)}<a class="tr-year" id="tr-year" href="#/year?y=${T.ms[n-1].slice(0,4)}">${T.ms[n-1].slice(0,4)} 年度视图 <b aria-hidden="true">›</b></a>${trendSVG(T,vis,si)}
  <div class="tr-chips">${chips||'<span class="sub" style="font-size:13px">这段时间没有 JPY 支出</span>'}</div>${det}
  <div class="tr-mvs">${mover("涨得最多",up,"tr-up")}${mover("降得最多",dn,"tr-dn")}</div>
- ${ok.length?`<div class="cur" id="tr-other">其他币种支出（不换算，未计入图表）：${ok.map(c=>fmt(T.other[c],c)).join(" · ")}</div>`:""}</div>`}
+ ${ok.length?`<div class="cur" id="tr-other">未折算的外币支出（未计入图表）：${ok.map(c=>fmt(T.other[c],c)).join(" · ")}</div>`:""}</div>`}
 const trendRedraw=()=>{const el=$("#trend");if(!el)return;const sx=$("#tr-scroll");const keep=sx?sx.scrollLeft:null;el.outerHTML=trendCard();trendScroll(TR.rs?null:keep);TR.rs=0};
 function trendScroll(keep){const sx=$("#tr-scroll");if(sx)sx.scrollLeft=keep==null?sx.scrollWidth:keep}
 document.addEventListener("click",e=>{const b=e.target.closest("#trend [data-tr],#trend [data-tc],#trend [data-tm]");if(!b)return;const d=b.dataset;
@@ -187,7 +191,7 @@ function entrySheet(r){const s=r.type==="income"?"+":r.type==="transfer"?"":"-";
  return `<div class="dim" data-eclose="1"></div><div class="sheet" id="entry" role="dialog" aria-label="账目详情"><div class="grab"></div><div class="navbar"><span></span><span class="t">账目详情</span><button class="nb b" data-eclose="1">完成</button></div><div class="body" style="padding:0 16px 24px">
  <div style="text-align:center;padding:16px 0 4px"><div class="big num ${r.type==="income"?"in":""}" style="font-size:40px;font-weight:700" data-f="amount">${s}${fmt(r.amount,r.currency)}</div><div class="sub" style="font-size:15px;margin-top:4px">${esc(r.payee||"—")}${isPend(r)?'<span class="tag">待确认</span>':""}</div></div>
  ${r.rc?`<div class="rc" id="rc" data-th="${r.rc.thumb}" data-full="${r.rc.id}"><button class="rc-th" data-rview="1" aria-label="查看收据大图"><span class="rc-ph">正在解密收据…</span></button></div>`:r.hasAtt?`<div class="rc" id="rc"><div class="rc-th"><span class="rc-ph err">收据暂不可用</span></div></div>`:""}
- <div class="group" style="margin-top:16px">${f("时间",esc(r.d+" "+r.hm),"time")}${f("类型",TYPE[r.type],"type")}${f("分类",esc(r.category||"—"),"category")}${f("账户",esc(r.account||"—"),"account")}${f("商户",esc(r.payee||"—"),"payee")}${f("备注",esc(r.note||"—"),"note")}${f("来源",esc(SRC[r.source]||r.source||"—"),"source")}${f("币种",esc(r.currency),"currency")}${f("状态",isPend(r)?'<span class="tag" style="margin:0">待确认</span>':"已确认","pending")}${r.confidence!=null?f("识别置信度",Math.round(+r.confidence*100)+"%","confidence"):""}${f("收据",r.rc?"有（见下方）":r.hasAtt?"有（尚未上传）":"无","attachment")}${(()=>{try{const t=r.updated_at&&!isNaN(Date.parse(r.updated_at))?tokyo(r.updated_at):null;return t?f("更新于",esc(t.d+" "+t.hm),"updated"):""}catch{return ""}})()}${f("编号",'<span class="num" style="font-size:13px;color:var(--sub)">'+esc(r.id)+'</span>',"id")}</div>
+ <div class="group" style="margin-top:16px">${f("时间",esc(r.d+" "+r.hm),"time")}${f("类型",TYPE[r.type],"type")}${f("分类",esc(r.category||"—"),"category")}${f("账户",esc(r.account||"—"),"account")}${f("商户",esc(r.payee||"—"),"payee")}${f("备注",esc(r.note||"—"),"note")}${f("来源",esc(SRC[r.source]||r.source||"—"),"source")}${f("币种",esc(r.currency),"currency")}${r.currency!==BASE?f("折算",r.fx?`${fmt(jpyOf(r))} <small class="sub">（汇率 ${r.fx.rate} · ${esc(r.fx.date)} · ${esc(r.fx.src)}）</small>`:'<span class="sub">未折算</span>',"fx"):""}${f("状态",isPend(r)?'<span class="tag" style="margin:0">待确认</span>':"已确认","pending")}${r.confidence!=null?f("识别置信度",Math.round(+r.confidence*100)+"%","confidence"):""}${f("收据",r.rc?"有（见下方）":r.hasAtt?"有（尚未上传）":"无","attachment")}${(()=>{try{const t=r.updated_at&&!isNaN(Date.parse(r.updated_at))?tokyo(r.updated_at):null;return t?f("更新于",esc(t.d+" "+t.hm),"updated"):""}catch{return ""}})()}${f("编号",'<span class="num" style="font-size:13px;color:var(--sub)">'+esc(r.id)+'</span>',"id")}</div>
   ${isPend(r)?'<div class="readonly">这笔还没确认。需要改的话，告诉记账管家。</div>':""}</div></div>`}
 const openEntry=(id,force,vt)=>{const r=E.find(x=>x.id===id);if(!r)return;if(route()==="list")selId=id;if(!force&&isWide()&&route()==="list"){layout();document.querySelectorAll("#res .row.sel").forEach(x=>x.classList.remove("sel"));const rw=document.querySelector(`#res .row[data-id="${CSS.escape(id)}"]`);if(rw)rw.classList.add("sel");return}const was=!!$("#overlay").innerHTML;rcRevoke();$("#overlay").innerHTML=entrySheet(r);document.body.style.overflow="hidden";if(!vt&&!was)sheetIn($("#overlay"));rcLoad()};
 const closeEntry=()=>{const inPane=!!$("#pane #entry");rcRevoke();ghostOut($("#overlay"));$("#overlay").innerHTML="";document.body.style.overflow="";if(inPane||!isWide()){selId=null;document.querySelectorAll("#res .row.sel").forEach(x=>x.classList.remove("sel"))}if(inPane)layout()};
@@ -231,8 +235,8 @@ async function loadMerch(){try{const r=await fetch((TESTPLAIN?"data/merchants.js
  if(route()==="home"){const el=$("#stores");if(el){const busy=el.hasAttribute("aria-busy");el.outerHTML=storesCard(rym);if(busy)mv($("#stores"),[{opacity:.3},{opacity:1}],{d:220})}}}
 const merOnline=()=>{try{return localStorage.getItem(MER_ON)==="1"}catch{return false}};
 const STORE_SKIP=new Set(["家政","买菜","订阅"]);
-function storeStats(ym,withOnline){const m=E.filter(r=>r.ym===ym&&r.type==="expense"&&!r.deleted&&r.currency===BASE&&r.payee&&!STORE_SKIP.has(r.category));const by={};
- m.forEach(r=>{const k=r.payee,o=by[k]||(by[k]={payee:k,days:new Set(),amt:0,last:""});o.days.add(r.d);o.amt+=r.amount;if(r.d>o.last)o.last=r.d});
+function storeStats(ym,withOnline){const m=E.filter(r=>r.ym===ym&&r.type==="expense"&&!r.deleted&&jpyOf(r)!=null&&r.payee&&!STORE_SKIP.has(r.category));const by={};
+ m.forEach(r=>{const k=r.payee,o=by[k]||(by[k]={payee:k,days:new Set(),amt:0,last:""});o.days.add(r.d);o.amt+=jpyOf(r);if(r.d>o.last)o.last=r.d});
  const info=k=>MER&&MER[k]&&typeof MER[k]==="object"?MER[k]:null,isOnline=k=>{if(!MER)return false;const i=info(k);return !i||!!i.online||!i.address};   // MER missing → can't tell, keep all
  const all=Object.values(by).map(o=>({...o,visits:o.days.size,info:info(o.payee),online:isOnline(o.payee)})),a=withOnline?all:all.filter(o=>!o.online);
  const tie=(x,y)=>y.amt-x.amt||y.last.localeCompare(x.last)||x.payee.localeCompare(y.payee);
@@ -272,15 +276,15 @@ function daoDest(t){let out=null,first=true;for(let i=t.indexOf("到");i>=0;i=t.
 function rideDest(r){for(const t of [r.note,r.summary]){if(!t||typeof t!=="string")continue;const parts=t.split(ARROW);
  if(parts.length>=2){for(let k=parts.length-1;k>=1;k--){const d=normDest(parts[k]);if(d)return d}continue}   // last non-empty stop; "→B" (no origin) OK
  const d=daoDest(t);if(d)return d}return null}
-function rideStats(ym){const rs=E.filter(r=>r.ym===ym&&r.currency===BASE&&isRide(r)),by={};let miss=0;
- rs.forEach(r=>{const d=rideDest(r);if(!d){miss++;return}const k=destKey(d),o=by[k]||(by[k]={dest:d,n:0,amt:0,last:""});o.n++;o.amt+=r.amount;if(r.d>=o.last){o.last=r.d;o.dest=d}});
+function rideStats(ym){const rs=E.filter(r=>r.ym===ym&&jpyOf(r)!=null&&isRide(r)),by={};let miss=0;
+ rs.forEach(r=>{const d=rideDest(r);if(!d){miss++;return}const k=destKey(d),o=by[k]||(by[k]={dest:d,n:0,amt:0,last:""});o.n++;o.amt+=jpyOf(r);if(r.d>=o.last){o.last=r.d;o.dest=d}});
  return {top:Object.values(by).sort((x,y)=>y.n-x.n||y.amt-x.amt||y.last.localeCompare(x.last)||x.dest.localeCompare(y.dest)).slice(0,3),miss,total:rs.length}}
 function ridesCard(ym){const R=rideStats(ym);
  const rows=R.top.map((o,j)=>`<button class="rd-row" data-jdest="${esc(o.dest)}" data-jm="${ym}" data-n="${o.n}" data-amt="${o.amt}"><span class="st-rk num">${j+1}</span><span class="rd-d">${esc(o.dest)}</span><span class="st-v num"><b>${o.n} 次</b><small>${fmt(o.amt)}</small></span></button>`).join("");
  return `<div class="card" id="rides"><h2>打车最常去的地方<small>JPY</small></h2>${rows||`<div class="st-empty" id="rd-empty">${mlabel(ym)}没有可识别目的地的打车记录</div>`}${R.miss?`<div class="rd-ex" id="rd-ex">${R.miss} 笔行程未识别目的地，未计入</div>`:""}</div>`}
 // ---- b9 本月洞察: 1–2 sentences, ranked by significance (yen-equivalent), nothing when the data is thin.
 // JPY helper used by all b9 aggregates (b9 FX commit extends it to converted foreign entries)
-const jy=r=>r.currency===BASE?r.amount:null;
+const jy=r=>jpyOf(r);
 const FIXED=new Set(["家政","订阅"]);   // 固定支出 categories (b9)
 // Thresholds (documented in design notes):
 //  category vs same days last month: category not 固定; ≥2 entries in EACH period; last-month base ≥ ¥3,000; |Δ| ≥ 15% and ≥ ¥2,000
@@ -338,7 +342,7 @@ function openSub(i){const it=(SUBS.items||[])[i];if(!it)return;const rows=sorted
 document.addEventListener("click",e=>{const r=e.target.closest("[data-sub]");if(r)openSub(+r.dataset.sub)});
 // ---- batch 2: calendar heatmap, month-to-date, chart → list jumps
 const dimYM=ym=>new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5),0)).getUTCDate();
-const dayEx=ym=>{const o={};for(const r of E)if(r.ym===ym&&r.type==="expense"&&r.currency==="JPY"&&inScope(r,HS))o[r.d]=(o[r.d]||0)+r.amount;return o};
+const dayEx=ym=>{const o={};for(const r of E)if(r.ym===ym&&r.type==="expense"&&jpyOf(r)!=null&&inScope(r,HS))o[r.d]=(o[r.d]||0)+jpyOf(r);return o};
 function heatLevel(v,mx){if(!v)return 0;const f=v/mx;return f>.75?4:f>.5?3:f>.25?2:1}
 function heatmap(ym){const o=dayEx(ym),n=dimYM(ym),first=new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5)-1,1)).getUTCDay(),td=today(),vals=Object.values(o),mx=Math.max(1,...vals);
  let cells="";for(let i=0;i<first;i++)cells+=`<span class="hm-pad"></span>`;
@@ -349,14 +353,14 @@ function heatmap(ym){const o=dayEx(ym),n=dimYM(ym),first=new Date(Date.UTC(+ym.s
  <div class="hm-wd">${[...WD].map(w=>`<span>${w}</span>`).join("")}</div><div class="hm">${cells}</div>
  <div class="hm-lg"><span>少</span>${[0,1,2,3,4].map(l=>`<i class="l${l}"></i>`).join("")}<span>多</span><span style="flex:1"></span><span>点日期查看当天明细</span></div></div>`}
 function mtd(ym){const isNow=ym===nowYM(),n=isNow?+today().slice(8):dimYM(ym),pm=shiftYM(ym,-1),pn=Math.min(n,dimYM(pm));
- const s=(m,k)=>sum(E.filter(r=>r.ym===m&&r.type==="expense"&&r.currency==="JPY"&&inScope(r,HS)&&+r.d.slice(8)<=k)),cur=s(ym,n),prev=s(pm,pn),d=cur-prev;
+ const s=(m,k)=>sum(E.filter(r=>r.ym===m&&r.type==="expense"&&jpyOf(r)!=null&&inScope(r,HS)&&+r.d.slice(8)<=k)),cur=s(ym,n),prev=s(pm,pn),d=cur-prev;
  const note=n>pn?`（上月只有 ${pn} 天）`:"";
  return `<div class="mtd" id="mtd" data-cur="${cur}" data-prev="${prev}" data-n="${n}" data-pn="${pn}"><div><small>${isNow?`本月至今 1–${n}日`:`${mlabel(ym)} 1–${n}日`}</small><b class="num">${fmt(cur)}</b></div>
  <div><small>上月同期 ${mlabel(pm)} 1–${pn}日${note}</small><b class="num">${fmt(prev)}</b></div>
  <div><small>差额</small><b class="num ${prev&&d>0?"up":prev&&d<0?"down":""}" id="mtd-d">${prev?(d>=0?"+":"-")+fmt(Math.abs(d))+" · "+(d>=0?"+":"")+(d/prev*100).toFixed(1)+"%":"—"}</b></div></div>`}
-function jump(o){Object.assign(st,{q:"",payee:"",scope:"",dest:"",type:"",category:"",account:"",currency:"",pend:false,month:"",day:""},o);const q=$("#q");if(q)q.value="";
+function jump(o){Object.assign(st,{q:"",payee:"",scope:"",dest:"",cv:"",type:"",category:"",account:"",currency:"",pend:false,month:"",day:""},o);const q=$("#q");if(q)q.value="";
  if(route()==="list"){listRes();scrollTo(0,0)}else location.hash="#/list"}
-document.addEventListener("click",e=>{const rd=e.target.closest("[data-jdest]");if(rd&&!rd.closest("#overlay")){e.stopPropagation();return jump({dest:rd.dataset.jdest,month:rd.dataset.jm||"",type:"expense",currency:BASE})}const p=e.target.closest("[data-jp]");if(p&&!p.closest("#overlay")){e.stopPropagation();return jump({payee:p.dataset.jp,month:p.dataset.jm||"",type:"expense",currency:BASE,scope:"store"})}const b=e.target.closest("[data-jd],[data-jc]");if(!b||b.closest("#overlay"))return;e.stopPropagation();const d=b.dataset;
+document.addEventListener("click",e=>{const rd=e.target.closest("[data-jdest]");if(rd&&!rd.closest("#overlay")){e.stopPropagation();return jump({dest:rd.dataset.jdest,month:rd.dataset.jm||"",type:"expense",cv:"1"})}const p=e.target.closest("[data-jp]");if(p&&!p.closest("#overlay")){e.stopPropagation();return jump({payee:p.dataset.jp,month:p.dataset.jm||"",type:"expense",cv:"1",scope:"store"})}const b=e.target.closest("[data-jd],[data-jc]");if(!b||b.closest("#overlay"))return;e.stopPropagation();const d=b.dataset;
  if(d.jd)jump({day:d.jd,month:d.jd.slice(0,7)});else jump({category:d.jc||"",month:d.jm||"",type:"expense"})},true);
 // ---- foldable / wide: two-pane list + detail. State lives in JS (selId, st, scroll), so resizing/folding never reloads.
 const WIDEQ=matchMedia("(min-width: 600px), (horizontal-viewport-segments: 2)");
@@ -416,10 +420,10 @@ document.addEventListener("click",e=>{const pb=e.target.closest("[data-pg]");if(
  if(b.id==="newbar")return applyPending();
  if(d.refresh!=null)return refresh();if(d.retry!=null)return boot();if(d.eclose!=null)return closeEntry();if(d.id!=null)return openFromRow(d.id,b.closest("#res .row,.row"));
  if(d.m){rmode=d.m;render()}else if(d.p){shiftPeriod(+d.p)}else if(d.now){rym=nowYM();ryr=rym.slice(0,4);render()}
- else if(d.drill!=null){Object.assign(st,{q:"",payee:"",scope:"",dest:"",day:"",type:"expense",category:d.drill,account:"",currency:"",pend:false,month:rmode==="m"?rym:""})}
+ else if(d.drill!=null){Object.assign(st,{q:"",payee:"",scope:"",dest:"",cv:"",day:"",type:"expense",category:d.drill,account:"",currency:"",pend:false,month:rmode==="m"?rym:""})}
  else if(d.qclr!=null){e.preventDefault();st.q="";const q=$("#q");q.value="";listRes();q.focus()}
  else{if(d.open)sheet=true;if(d.close)sheet=false;if(d.clr){st[d.clr]="";if(d.clr==="payee")st.scope="";if(d.clr==="day")st.month=""}if(d.pend)st.pend=!st.pend;if(d.type!=null)st.type=d.type;if(d.cat!=null)st.category=st.category===d.cat?"":d.cat;
-  if(d.reset){Object.assign(st,{q:"",payee:"",scope:"",dest:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false});const q=$("#q");if(q)q.value=""}listRes()}});
+  if(d.reset){Object.assign(st,{q:"",payee:"",scope:"",dest:"",cv:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false});const q=$("#q");if(q)q.value=""}listRes()}});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){if($("#rviewer"))return rvClose();closeEntry()}if(e.key==="Enter"&&e.target.dataset&&e.target.dataset.id)openEntry(e.target.dataset.id)});
 window.addEventListener("hashchange",go);
 // ---- encrypted data (AES-256-GCM, PBKDF2-SHA256). Only *.enc.json is published; the derived key is kept in memory,
@@ -439,7 +443,7 @@ class Locked extends Error{}
 async function currentKey(){if(KEY)return KEY;const k=await keyLoad();if(k&&k.key)KEY=k;return KEY}
 async function openEnc(enc){const K=await currentKey();if(!K)throw new Locked("locked");
  try{return await decryptWith(K,enc)}catch(e){KEY=null;await keyClear();throw new Locked("key no longer works")}}   // e.g. password changed
-function wipe(){rcRevoke();ghostsClear();MV.list=false;selId=null;{const p=$("#pane");if(p){p.innerHTML="";delete p.dataset.k}}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;MER=undefined;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;pg=1;Object.assign(st,{q:"",payee:"",scope:"",dest:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
+function wipe(){rcRevoke();ghostsClear();MV.list=false;selId=null;{const p=$("#pane");if(p){p.innerHTML="";delete p.dataset.k}}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;MER=undefined;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;pg=1;Object.assign(st,{q:"",payee:"",scope:"",dest:"",cv:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
  ["#app","#overlay","#sheet"].forEach(q=>{const el=$(q);if(el)el.innerHTML=""});const t=$("#toast");if(t){t.textContent="";t.classList.remove("show")}
  const nb=$("#newbar");if(nb)nb.hidden=true;const c=$("#pcnt");if(c){c.hidden=true;c.textContent=""}document.body.style.overflow=""}
 async function lock(){KEY=null;wipe();await keyClear();showUnlock()}
