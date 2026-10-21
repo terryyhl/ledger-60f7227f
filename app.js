@@ -15,7 +15,7 @@ function tokyo(dt){dt=String(dt||"");const t=/(Z|[+-]\d\d:?\d\d)$/.test(dt)?Date
 const today=()=>tokyo(new Date().toISOString()).d,nowYM=()=>today().slice(0,7);
 const conf=r=>r.confidence==null||r.confidence===""||isNaN(+r.confidence)?1:+r.confidence;
 const isPend=r=>conf(r)<0.8;
-function norm(r){const t=tokyo(r.datetime);const {attachment,...rest}=r;return {...rest,amount:Math.abs(+r.amount||0),currency:r.currency||"JPY",d:t.d,ym:t.d.slice(0,7),y:t.d.slice(0,4),hm:t.hm,key:t.d+"T"+t.hm+"|"+r.datetime}}
+function norm(r){const t=tokyo(r.datetime);const {attachment,...rest}=r;return {...rest,hasAtt:!!attachment,amount:Math.abs(+r.amount||0),currency:r.currency||"JPY",d:t.d,ym:t.d.slice(0,7),y:t.d.slice(0,4),hm:t.hm,key:t.d+"T"+t.hm+"|"+r.datetime}}
 const base=a=>a.filter(r=>r.currency===BASE),sum=a=>a.reduce((s,r)=>s+r.amount,0);
 const exOf=a=>sum(base(a).filter(r=>r.type==="expense")),incOf=a=>sum(base(a).filter(r=>r.type==="income"));
 const groupBy=(a,k)=>a.reduce((o,r)=>((o[r[k]]=o[r[k]]||[]).push(r),o),{});
@@ -62,10 +62,20 @@ function budget(){const ym=rym,m=base(E.filter(r=>r.ym===ym&&r.type==="expense")
 const st={q:"",month:"",type:"",category:"",account:"",currency:"",pend:false};let sheet=false;
 const uniq=k=>[...new Set(E.map(r=>r[k]).filter(Boolean))].sort();
 function filtered(){const q=st.q.trim().toLowerCase();return sorted(E.filter(r=>(!st.month||r.ym===st.month)&&(!st.type||r.type===st.type)&&(!st.category||r.category===st.category)&&(!st.account||r.account===st.account)&&(!st.currency||r.currency===st.currency)&&(!st.pend||isPend(r))
- &&(!q||[r.payee,r.note,r.category].join(" ").toLowerCase().includes(q))))}
+ &&qMatch(r,q)))}
+// search: space-separated tokens, all must match. A token matches the payee / note / category / account text, or the amount:
+// "2900" "¥2,900" "2,900円" = amount equals (text containing the digits also matches); ">5000" "<=1000" "1000-3000" = amount range.
+const NUMQ=/^[¥￥]?\s*(\d[\d,]*(?:\.\d+)?)\s*(?:円|元)?$/,CMPQ=/^(>=|<=|>|<|＞|＜)\s*[¥￥]?\s*(\d[\d,]*(?:\.\d+)?)$/,RNGQ=/^[¥￥]?(\d[\d,]*(?:\.\d+)?)\s*[-~～]\s*[¥￥]?(\d[\d,]*(?:\.\d+)?)$/;
+const qNum=x=>+x.replace(/,/g,"");
+function qTok(r,t){let m;const txt=[r.payee,r.note,r.category,r.account].join(" ").toLowerCase();
+ if(m=t.match(CMPQ)){const n=qNum(m[2]),o=m[1].replace("＞",">").replace("＜","<");return o===">"?r.amount>n:o==="<"?r.amount<n:o===">="?r.amount>=n:r.amount<=n}
+ if(m=t.match(RNGQ)){const a=qNum(m[1]),b=qNum(m[2]);return r.amount>=Math.min(a,b)&&r.amount<=Math.max(a,b)}
+ if(m=t.match(NUMQ)){const n=qNum(m[1]);return Math.abs(r.amount-n)<0.005||txt.includes(m[1])||txt.includes(m[1].replace(/,/g,""))}
+ return txt.includes(t)}
+const qMatch=(r,q)=>!q||q.split(/\s+/).filter(Boolean).every(t=>qTok(r,t));
 const anyF=()=>st.q||st.month||st.type||st.category||st.account||st.currency||st.pend;
 function chip(k,label,val){return val?`<button class="chip on" data-clr="${k}">${esc(val)} <span class="x">✕</span></button>`:`<button class="chip dd" data-open="1">${label}</button>`}
-function list(){return navbar("明细","",`<div class="search-hit"><label class="search"><span class="mag"></span><input id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="搜索商户、备注或分类" value="${esc(st.q)}"><button class="qclr" data-qclr="1" aria-label="清除搜索"${st.q?"":" hidden"}>✕</button></label></div>
+function list(){return navbar("明细","",`<div class="search-hit"><label class="search"><span class="mag"></span><input id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="搜索商户、备注、金额或分类" value="${esc(st.q)}"><button class="qclr" data-qclr="1" aria-label="清除搜索"${st.q?"":" hidden"}>✕</button></label></div>
  <div class="chips" id="chips"></div>`)+`<div id="res"></div>`}
 function chipsHTML(){return chip("month","月份",st.month&&mlabel(st.month))+chip("type","类型",TYPE[st.type])+chip("category","分类",st.category)+chip("account","账户",st.account)+chip("currency","币种",st.currency)+`<button class="chip ${st.pend?"on":""}" data-pend="1">待确认</button>`}
 function listRes(keep){if(!keep)lim.list=PAGE;$("#chips").innerHTML=chipsHTML();const qc=$(".qclr");if(qc)qc.hidden=!st.q;const a=filtered();
@@ -154,7 +164,7 @@ const SRC={screenshot:"截图",text:"文字",voice:"录音",audio:"录音",manua
 function entrySheet(r){const s=r.type==="income"?"+":r.type==="transfer"?"":"-";const f=(k,v,id)=>`<div class="row"><span class="m">${k}</span><span class="v" data-f="${id}" style="white-space:normal;text-align:right;max-width:65%">${v}</span></div>`;
  return `<div class="dim" data-eclose="1"></div><div class="sheet" id="entry" role="dialog" aria-label="账目详情"><div class="grab"></div><div class="navbar"><span></span><span class="t">账目详情</span><button class="nb b" data-eclose="1">完成</button></div><div class="body" style="padding:0 16px 24px">
  <div style="text-align:center;padding:16px 0 4px"><div class="big num ${r.type==="income"?"in":""}" style="font-size:40px;font-weight:700" data-f="amount">${s}${fmt(r.amount,r.currency)}</div><div class="sub" style="font-size:15px;margin-top:4px">${esc(r.payee||"—")}${isPend(r)?'<span class="tag">待确认</span>':""}</div></div>
- <div class="group" style="margin-top:16px">${f("时间",esc(r.d+" "+r.hm),"time")}${f("类型",TYPE[r.type],"type")}${f("分类",esc(r.category||"—"),"category")}${f("账户",esc(r.account||"—"),"account")}${f("商户",esc(r.payee||"—"),"payee")}${f("备注",esc(r.note||"—"),"note")}${f("来源",esc(SRC[r.source]||r.source||"—"),"source")}${f("状态",isPend(r)?'<span class="tag" style="margin:0">待确认</span>':"已确认","pending")}</div>
+ <div class="group" style="margin-top:16px">${f("时间",esc(r.d+" "+r.hm),"time")}${f("类型",TYPE[r.type],"type")}${f("分类",esc(r.category||"—"),"category")}${f("账户",esc(r.account||"—"),"account")}${f("商户",esc(r.payee||"—"),"payee")}${f("备注",esc(r.note||"—"),"note")}${f("来源",esc(SRC[r.source]||r.source||"—"),"source")}${f("币种",esc(r.currency),"currency")}${f("状态",isPend(r)?'<span class="tag" style="margin:0">待确认</span>':"已确认","pending")}${r.confidence!=null?f("识别置信度",Math.round(+r.confidence*100)+"%","confidence"):""}${f("收据",r.hasAtt?"有（暂不显示）":"无","attachment")}${(()=>{try{const t=r.updated_at&&!isNaN(Date.parse(r.updated_at))?tokyo(r.updated_at):null;return t?f("更新于",esc(t.d+" "+t.hm),"updated"):""}catch{return ""}})()}${f("编号",'<span class="num" style="font-size:13px;color:var(--sub)">'+esc(r.id)+'</span>',"id")}</div>
  ${isPend(r)?'<div class="readonly">这笔还没确认。需要改的话，告诉记账管家。</div>':""}</div></div>`}
 const openEntry=id=>{const r=E.find(x=>x.id===id);if(r){$("#overlay").innerHTML=entrySheet(r);document.body.style.overflow="hidden"}};
 const closeEntry=()=>{$("#overlay").innerHTML="";document.body.style.overflow=""};
@@ -193,7 +203,8 @@ function openSub(i){const it=(SUBS.items||[])[i];if(!it)return;const rows=sorted
 document.addEventListener("click",e=>{const r=e.target.closest("[data-sub]");if(r)openSub(+r.dataset.sub)});
 // ---- router
 const ROUTES={home,list,subs,budget,report};const route=()=>location.hash.replace(/^#\/?/,"").split("?")[0]||"home";
-function render(){if(route()==="pending"){history.replaceState(null,"","#/subs")}const k=route(),fn=ROUTES[k]||home;if(k!=="list")$("#sheet").innerHTML="";
+let lastRoute="";
+function render(){if(route()==="pending"){history.replaceState(null,"","#/subs")}const k=route(),fn=ROUTES[k]||home;if(k!==lastRoute&&$("#overlay").innerHTML){closeEntry()}lastRoute=k;if(k!=="list")$("#sheet").innerHTML="";
  $("#app").innerHTML=fn();const tk=k==="budget"?"home":k;document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.r===tk));
  subBadge();if(k==="list")listRes()}
 const go=()=>{render();window.scrollTo(0,0)};
