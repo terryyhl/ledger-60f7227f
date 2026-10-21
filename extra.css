@@ -215,3 +215,10 @@ html{background:var(--bg)}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .st-sk i{display:block;height:44px;margin:12px 0;border-radius:10px;background:var(--fill);opacity:.6}
 .st-sk i:nth-child(2){width:82%}.st-sk i:nth-child(3){width:64%}
+/* B7: 打车最常去的地方 */
+.rd-row{display:grid;grid-template-columns:20px 1fr auto;align-items:center;gap:8px;width:100%;min-height:56px;padding:0;border:0;border-top:.5px solid var(--sep);background:none;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+#rides h2+.rd-row{border-top:0}
+.rd-d{font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.rd-ex{font-size:13px;color:var(--sub);padding-top:8px;border-top:.5px solid var(--sep)}
+.rd-row:focus-visible{outline:2px solid var(--blue);outline-offset:-2px;border-radius:8px}
+@media (prefers-reduced-motion:no-preference){.rd-row{transition:transform .2s var(--spr)}.rd-row:active{transform:scale(.98)}}
