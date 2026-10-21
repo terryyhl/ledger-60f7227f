@@ -15,3 +15,4 @@ data/*.json
 !data/*.enc.json
 test_b1.py
 test_b2.py
+test_b3.py

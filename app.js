@@ -131,26 +131,28 @@ function trendData(range=TR.range){const ms=trendMonths(range),idx={};ms.forEach
  const val=(c,i)=>i<0?(prev[c]||0):(by[c]?by[c][i]:0);return {ms,cats,by,prev,other,val}}
 const niceMax=v=>{if(v<=0)return 1;const p=10**Math.floor(Math.log10(v)),f=v/p;return (f<=1?1:f<=2?2:f<=5?5:10)*p};
 const yen=v=>v>=10000?(v/10000).toFixed(v%10000?1:0)+"万":String(v);
-function trendSVG(T,vis,si){const n=T.ms.length,W=330,H=170,top=8,bot=22,ch=H-top-bot,slot=(W-30)/n,bw=Math.min(26,slot*.6);
- const tot=T.ms.map((_,i)=>sumA(vis.map(c=>T.val(c,i)))),mx=niceMax(Math.max(0,...tot));
- let s=`<svg id="tr-svg" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="分类趋势图"><defs>`;
- T.ms.forEach((m,i)=>{const x=i*slot+(slot-bw)/2,h=tot[i]/mx*ch;s+=`<clipPath id="tc${i}"><rect x="${x.toFixed(1)}" y="${(top+ch-h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(5,bw/4).toFixed(1)}"/></clipPath>`});
+function trendSVG(T,vis,si){const n=T.ms.length,W=Math.max(330,n*46+30),H=170,top=8,bot=22,ch=H-top-bot,slot=(W-30)/n,bw=Math.min(26,slot*.6);
+ const tot=T.ms.map((_,i)=>sumA(vis.map(c=>T.val(c,i)))),mx=niceMax(Math.max(0,...tot)),MINH=2.5;
+ // drawn height per segment: true scale, but any nonzero value gets ≥2.5px so it stays visible (values/labels unchanged)
+ const hOf=v=>v?Math.max(MINH,v/mx*ch):0,bh=T.ms.map((_,i)=>sumA(vis.map(c=>hOf(T.val(c,i)))));
+ let s=`<div class="tr-scroll" id="tr-scroll"><svg id="tr-svg" viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${n*46+30}px" role="img" aria-label="分类趋势图"><defs>`;
+ T.ms.forEach((m,i)=>{const x=i*slot+(slot-bw)/2,h=bh[i];s+=`<clipPath id="tc${i}"><rect x="${x.toFixed(1)}" y="${(top+ch-h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(5,bw/4).toFixed(1)}"/></clipPath>`});
  s+=`</defs>`;[0,.5,1].forEach(f=>{const y=(top+ch-f*ch).toFixed(1);s+=`<line x1="0" x2="${W-30}" y1="${y}" y2="${y}" style="stroke:var(--sep);stroke-width:${f?.5:1}"${f?' stroke-dasharray="2 3"':""}/>`+(f?`<text x="${W}" y="${(+y+3).toFixed(1)}" text-anchor="end" class="tr-ax">${yen(mx*f)}</text>`:"")});
  T.ms.forEach((m,i)=>{s+=`<rect data-tm="${i}" class="tr-hit" x="${(i*slot).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${H}" fill="transparent"/>`});   // month hit areas UNDER the segments
  T.ms.forEach((m,i)=>{const x=i*slot+(slot-bw)/2,dim=si!=null&&si!==i;let y=top+ch;
   s+=`<g class="tr-bar" data-m="${m}" data-v="${tot[i]}" opacity="${dim?.35:1}">`;
-  if(!tot[i])s+=`<rect class="z" x="${x.toFixed(1)}" y="${(top+ch-3).toFixed(1)}" width="${bw.toFixed(1)}" height="3" rx="1.5" style="fill:var(--fill)"/>`;
-  else{s+=`<g clip-path="url(#tc${i})">`;vis.forEach(c=>{const v=T.val(c,i);if(!v)return;const h=v/mx*ch;y-=h;s+=`<rect data-c="${esc(c)}" data-jc="${esc(c)}" data-jm="${m}" data-v="${v}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${(h+.4).toFixed(1)}" style="fill:${colorOf(c)}"/>`});s+=`</g>`}
+  if(!tot[i])s+=`<rect class="z" data-tm="${i}" x="${x.toFixed(1)}" y="${(top+ch-3).toFixed(1)}" width="${bw.toFixed(1)}" height="3" rx="1.5" style="fill:var(--fill)"/>`;
+  else{s+=`<g clip-path="url(#tc${i})">`;vis.forEach(c=>{const v=T.val(c,i);if(!v)return;const h=hOf(v);y-=h;s+=`<rect data-c="${esc(c)}" data-tm="${i}" data-m="${m}" data-v="${v}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${(h+.4).toFixed(1)}" style="fill:${colorOf(c)}"/>`});s+=`</g>`}
   s+=`<text x="${(i*slot+slot/2).toFixed(1)}" y="${H-6}" text-anchor="middle" class="tr-ax${si===i?" on":""}">${n>6&&i%2&&i!==n-1&&si!==i?"":+m.slice(5)+"月"}</text>`;
   s+=`</g>`});
- return s+`</svg>`}
+ return s+`</svg></div>`}
 function trendCard(){const T=trendData(),vis=T.cats.filter(c=>!TR.off.has(c)),n=T.ms.length;
  if(TR.sel!=null&&TR.sel>=n)TR.sel=null;const si=TR.sel,mi=si==null?n-1:si,m=T.ms[mi];
  const segs=[["6","6个月"],["ytd","今年"],["12","12个月"]].map(([k,l])=>`<button data-tr="${k}" class="${TR.range===k?"on":""}">${l}</button>`).join("");
  const chips=T.cats.map(c=>`<button class="tchip${TR.off.has(c)?"":" on"}" data-tc="${esc(c)}" aria-pressed="${!TR.off.has(c)}"><i style="background:${colorOf(c)}"></i>${esc(c)}</button>`).join("");
  const rows=vis.map(c=>({c,v:T.val(c,mi),p:T.val(c,mi-1)}));const tv=sumA(rows.map(r=>r.v)),tp=sumA(rows.map(r=>r.p));
  const det=`<div class="tr-det" id="tr-det" data-m="${m}"><div class="tr-dh"><b>${+m.slice(0,4)}年${mlabel(m)}${si==null?"":" · 已选"}</b><span class="num" id="tr-tot">${fmt(tv)} <small class="${tp&&tv>tp?"up":tp&&tv<tp?"down":""}">${pctTxt(tv,tp)}</small></span></div>`+
-  rows.filter(r=>r.v||r.p).sort((a,b)=>b.v-a.v).map(r=>`<div class="tr-r" data-c="${esc(r.c)}" data-v="${r.v}"><i style="background:${colorOf(r.c)}"></i><span>${esc(r.c)}</span><span class="num">${fmt(r.v)}</span><small class="num ${r.p&&r.v>r.p?"up":r.p&&r.v<r.p?"down":""}">${pctTxt(r.v,r.p)}</small></div>`).join("")+`</div>`;
+  rows.filter(r=>r.v||r.p).sort((a,b)=>b.v-a.v).map(r=>`<button class="tr-r" data-c="${esc(r.c)}" data-v="${r.v}" data-jc="${esc(r.c)}" data-jm="${m}" aria-label="查看 ${mlabel(m)} ${esc(r.c)} 明细"><i style="background:${colorOf(r.c)}"></i><span>${esc(r.c)}</span><span class="num">${fmt(r.v)}</span><small class="num ${r.p&&r.v>r.p?"up":r.p&&r.v<r.p?"down":""}">${pctTxt(r.v,r.p)}</small><b class="chev" aria-hidden="true">›</b></button>`).join("")+(tv?`<button class="tr-all" id="tr-all" data-jc="" data-jm="${m}">查看 ${mlabel(m)} 全部支出明细 ›</button>`:"")+`</div>`;
  const mv=rows.map(r=>({...r,d:r.v-r.p})),up=mv.filter(r=>r.d>0).sort((a,b)=>b.d-a.d)[0],dn=mv.filter(r=>r.d<0).sort((a,b)=>a.d-b.d)[0];
  const mover=(t,r,id)=>`<div class="tr-mv" id="${id}"><small>${t}</small>${r?`<b><i style="background:${colorOf(r.c)}"></i>${esc(r.c)}</b><span class="num">${r.d>0?"+":"-"}${fmt(Math.abs(r.d))} · ${pctTxt(r.v,r.p)}</span>`:`<b>—</b><span class="num">—</span>`}</div>`;
  const ok=Object.keys(T.other);
@@ -159,9 +161,10 @@ function trendCard(){const T=trendData(),vis=T.cats.filter(c=>!TR.off.has(c)),n=
  <div class="tr-chips">${chips||'<span class="sub" style="font-size:13px">这段时间没有 JPY 支出</span>'}</div>${det}
  <div class="tr-mvs">${mover("涨得最多",up,"tr-up")}${mover("降得最多",dn,"tr-dn")}</div>
  ${ok.length?`<div class="cur" id="tr-other">其他币种支出（不换算，未计入图表）：${ok.map(c=>fmt(T.other[c],c)).join(" · ")}</div>`:""}</div>`}
-const trendRedraw=()=>{const el=$("#trend");if(el)el.outerHTML=trendCard()};
+const trendRedraw=()=>{const el=$("#trend");if(!el)return;const sx=$("#tr-scroll");const keep=sx?sx.scrollLeft:null;el.outerHTML=trendCard();trendScroll(TR.rs?null:keep);TR.rs=0};
+function trendScroll(keep){const sx=$("#tr-scroll");if(sx)sx.scrollLeft=keep==null?sx.scrollWidth:keep}
 document.addEventListener("click",e=>{const b=e.target.closest("#trend [data-tr],#trend [data-tc],#trend [data-tm]");if(!b)return;const d=b.dataset;
- if(d.tr){TR.range=d.tr;TR.sel=null}else if(d.tc!=null){TR.off.has(d.tc)?TR.off.delete(d.tc):TR.off.add(d.tc)}else{const i=+d.tm;TR.sel=TR.sel===i?null:i}trendRedraw()});
+ if(d.tr){TR.range=d.tr;TR.sel=null;TR.rs=1}else if(d.tc!=null){TR.off.has(d.tc)?TR.off.delete(d.tc):TR.off.add(d.tc)}else{const i=+d.tm;TR.sel=TR.sel===i?null:i}trendRedraw()});
 // ---- entry detail sheet
 const SRC={screenshot:"截图",text:"文字",voice:"录音",audio:"录音",manual:"手动"};
 function entrySheet(r){const s=r.type==="income"?"+":r.type==="transfer"?"":"-";const f=(k,v,id)=>`<div class="row"><span class="m">${k}</span><span class="v" data-f="${id}" style="white-space:normal;text-align:right;max-width:65%">${v}</span></div>`;
@@ -225,9 +228,9 @@ function mtd(ym){const isNow=ym===nowYM(),n=isNow?+today().slice(8):dimYM(ym),pm
 function jump(o){Object.assign(st,{q:"",type:"",category:"",account:"",currency:"",pend:false,month:"",day:""},o);const q=$("#q");if(q)q.value="";
  if(route()==="list"){listRes();scrollTo(0,0)}else location.hash="#/list"}
 document.addEventListener("click",e=>{const b=e.target.closest("[data-jd],[data-jc]");if(!b||b.closest("#overlay"))return;e.stopPropagation();const d=b.dataset;
- if(d.jd)jump({day:d.jd,month:d.jd.slice(0,7)});else jump({category:d.jc,month:d.jm||"",type:"expense"})},true);
+ if(d.jd)jump({day:d.jd,month:d.jd.slice(0,7)});else jump({category:d.jc||"",month:d.jm||"",type:"expense"})},true);
 // ---- foldable / wide: two-pane list + detail. State lives in JS (selId, st, scroll), so resizing/folding never reloads.
-const WIDEQ=matchMedia("(min-width: 720px), (horizontal-viewport-segments: 2)");
+const WIDEQ=matchMedia("(min-width: 600px), (horizontal-viewport-segments: 2)");
 const segs2=()=>{try{const s=window.viewport&&window.viewport.segments;return !!(s&&s.length===2&&Math.abs(s[0].top-s[1].top)<1)}catch{return false}};
 const isWide=()=>WIDEQ.matches||segs2();let selId=null;
 function paneHTML(){const r=selId&&E.find(x=>x.id===selId);return r?entrySheet(r).replace('<div class="dim" data-eclose="1"></div>','').replace('class="sheet" id="entry"','class="pane-in" id="entry"'):`<div class="pane-empty" id="pane-empty">选择一笔账目查看详情</div>`}
@@ -240,7 +243,7 @@ const ROUTES={home,list,subs,budget,report};const route=()=>location.hash.replac
 let lastRoute="";
 function render(){if(route()==="pending"){history.replaceState(null,"","#/subs")}const k=route(),fn=ROUTES[k]||home;if(k!==lastRoute&&$("#overlay").innerHTML){closeEntry()}lastRoute=k;if(k!=="list")$("#sheet").innerHTML="";
  $("#app").innerHTML=fn();const tk=k==="budget"?"home":k;document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.r===tk));
- subBadge();if(k==="list")listRes();layout()}
+ subBadge();if(k==="list")listRes();trendScroll();layout()}
 const go=()=>{render();window.scrollTo(0,0)};
 document.addEventListener("input",e=>{if(e.target.id==="q"){st.q=e.target.value;listRes()}});
 document.addEventListener("change",e=>{const f=e.target.dataset.f;if(f&&e.target.tagName==="SELECT"){st[f]=e.target.value;listRes()}});
