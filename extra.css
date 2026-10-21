@@ -50,8 +50,6 @@ body{min-height:100vh;min-height:100dvh;padding-bottom:calc(49px + 24px + env(sa
 .lt h1{flex:1;min-width:0;padding:4px 0 4px 16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lt .upd{font-size:13px;color:var(--sub);white-space:nowrap}
 .lt .rbtn{width:44px;height:44px;padding:0;justify-content:center}
-.top{padding-top:0}
-.standalone .top{padding-top:0}
 .seg button,.seg button.on,.chip,.chip.on{background-clip:padding-box!important}
 a.nb{text-decoration:none}
 [hidden]{display:none!important}
@@ -143,7 +141,7 @@ button.tr-r:active{background:var(--fill)}.tr-r .chev{color:var(--ter);font-weig
 /* B4-A: badge glyphs are text (≥4.5:1) in both modes: black on every palette colour (light 5.1–13.9, dark 5.8–14.9), white only on indigo (light 5.65 / dark 5.06). --ter (chevrons, disabled ›, grabber) raised to #6E6E73 (≥3:1 on #000/#1C1C1E). */
 .badge{color:#000}.badge[style*="--indigo"]{color:#fff}
 /* B4-A: ≤360px the heatmap card bleeds to the screen edges so 7 columns get ≥44px each; 2px tile gap is drawn with a transparent border so hit areas stay 44px */
-@media (max-width:360px){
+@media (max-width:389px){
  #heat{margin-left:-16px;margin-right:-16px;border-radius:0;padding-left:2px;padding-right:2px}
  #heat h2,#heat .hm-lg{padding-left:14px;padding-right:14px}
  #heat .hm,#heat .hm-wd{gap:0}
@@ -174,7 +172,14 @@ html{background:var(--bg)}
  .btn:active,.chip:active,.tab:active,.hm-c:active,.nb:active,.tchip:active,.rc-th:active,.seg button:active,.rbtn:active{transform:scale(.96)}
  .row[role=button]:active,button.tr-r:active,a.row[data-drill]:active{transform:scale(.985)}
 }
-::view-transition-old(root),::view-transition-new(root){animation-duration:.24s}
+/* root cross-fade: own opacity-only keyframes (replaces UA group size animation + plus-lighter blend) */
+::view-transition-group(root){animation:none}
+::view-transition-old(root){animation:.24s linear both vt-out;mix-blend-mode:normal}::view-transition-new(root){animation:.24s linear both vt-in;mix-blend-mode:normal}
+@keyframes vt-out{to{opacity:0}}@keyframes vt-in{from{opacity:0}}
 ::view-transition-group(ecard){animation:none}
 ::view-transition-old(ecard){animation:none;opacity:0}
 ::view-transition-new(ecard){animation:none;transform-origin:0 0}
+
+/* B4 QA P3: disabled ›/‹ (latest period) ≥3:1 in both modes; sheet spring overshoot never shows a gap at the bottom edge */
+:root{--dis:#86868B}@media(prefers-color-scheme:dark){:root{--dis:#6E6E73}}
+.sheet::after{content:"";position:absolute;left:0;right:0;top:100%;height:48px;background:inherit}
