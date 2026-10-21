@@ -203,3 +203,10 @@ html{background:var(--bg)}
 .st-tg input:checked+i{background:var(--green)}.st-tg input:checked+i::after{transform:translateX(20px)}
 .st-tg input:focus-visible+i{outline:2px solid var(--blue);outline-offset:2px}
 @media (prefers-reduced-motion:no-preference){.st-tg i::after{transition:transform .25s var(--spr)}.st-name{transition:transform .2s var(--spr)}.st-name:active{transform:scale(.97)}}
+/* B6: list pagination (in flow at the end of the list, so it always sits above the fixed tab bar + safe area; NF-33) */
+.pager{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:16px 0 calc(8px + env(safe-area-inset-bottom));padding:0}
+.pg-b{min-height:44px;min-width:88px;padding:0 12px;border:0;border-radius:10px;background:var(--card);color:var(--blue);font:inherit;font-size:17px;cursor:pointer}
+.pg-b:disabled{color:var(--dis);cursor:default}
+.pg-i{font-size:15px;color:var(--sub)}
+.pg-b:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+@media (prefers-reduced-motion:no-preference){.pg-b{transition:transform .2s var(--spr)}.pg-b:not(:disabled):active{transform:scale(.96)}}

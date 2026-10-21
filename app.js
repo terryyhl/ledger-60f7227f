@@ -27,9 +27,11 @@ function txRow(r){const s=r.type==="income"?"+":r.type==="transfer"?"":"-";
  return `<div class="row tall" role="button" tabindex="0" data-id="${esc(r.id)}"><span class="badge" style="background:${r.type==="transfer"?"var(--gray)":colorOf(r.category)}">${esc((r.type==="transfer"?"转":r.category||"·").slice(0,1))}</span>
  <div class="m"><div class="p">${esc(r.payee||r.category||"—")}${isPend(r)?'<span class="tag">待确认</span>':""}</div><div class="n">${esc([r.hm,r.type==="transfer"?"转账":r.category,r.account].filter(Boolean).join(" · "))}</div></div>
  <span class="amt num ${r.type==="income"?"in":""}">${s}${fmt(r.amount,r.currency)}</span></div>`}
-const PAGE=200;let lim={list:PAGE};
-const more=(k,n)=>n>lim[k]?`<button class="btn sec more" data-more="${k}" style="margin-top:16px">再显示 ${Math.min(PAGE,n-lim[k])} 笔（还有 ${n-lim[k]} 笔）</button>`:"";
-function days(a,right,n=Infinity){const full=groupBy(a,"d"),g=groupBy(sorted(a).slice(0,n),"d");return Object.keys(g).sort().reverse().map(d=>`<div class="sh" style="display:flex;justify-content:space-between;text-transform:none"><span>${dlabel(d)}</span><span class="num">${right(full[d])}</span></div><div class="group ic-rows">${sorted(g[d]).map(txRow).join("")}</div>`).join("")}
+// List pagination: PER entries per page, page number mirrored in the hash (#/list?p=3) so back/forward/reload restore it.
+const PER=20;let pg=1;
+const hashP=()=>{const m=/[?&]p=(\d+)/.exec(location.hash);return m?Math.max(1,+m[1]):1};
+const pager=(p,n)=>n<=1?"":`<nav class="pager" id="pager" aria-label="分页"><button class="pg-b" data-pg="-1"${p<=1?" disabled":""} aria-label="上一页">‹ 上一页</button><span class="pg-i num" id="pg-i" aria-live="polite">第 ${p}/${n} 页</span><button class="pg-b" data-pg="1"${p>=n?" disabled":""} aria-label="下一页">下一页 ›</button></nav>`;
+function days(a,right,n=Infinity,from=0){const full=groupBy(a,"d"),g=groupBy(sorted(a).slice(from,n),"d");return Object.keys(g).sort().reverse().map(d=>`<div class="sh" style="display:flex;justify-content:space-between;text-transform:none"><span>${dlabel(d)}</span><span class="num">${right(full[d])}</span></div><div class="group ic-rows">${sorted(g[d]).map(txRow).join("")}</div>`).join("")}
 const RICON='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>';
 let lastUpd=null;const updText=()=>lastUpd?"更新于 "+tokyo(new Date(lastUpd).toISOString()).hm:"";
 const navbar=(t,l="",inner="")=>`<div class="top">${l?`<div class="navbar">${l}</div>`:""}<div class="lt"><h1>${t}</h1><span class="upd">${updText()}</span><button class="nb rbtn${busy?" spin":""}" data-refresh="1" aria-label="刷新">${RICON}</button>${route()==="home"?'<button class="nb lockbtn" data-lock="1" aria-label="锁定">锁定</button>':""}</div>${inner}</div>`;
@@ -81,8 +83,9 @@ function chip(k,label,val){return val?`<button class="chip on" data-clr="${k}">$
 function list(){return navbar("明细","",`<div class="search-hit"><label class="search"><span class="mag"></span><input id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="搜索商户、备注、金额或分类" value="${esc(st.q)}"><button class="qclr" data-qclr="1" aria-label="清除搜索"${st.q?"":" hidden"}>✕</button></label></div>
  <div class="chips" id="chips"></div>`)+`<div id="res"></div>`}
 function chipsHTML(){return (st.payee?`<button class="chip on" data-clr="payee" id="chip-payee">${esc(st.payee)} <span class="x">✕</span></button>`:"")+(st.day?`<button class="chip on" data-clr="day" id="chip-day">${esc(dlabel(st.day))} <span class="x">✕</span></button>`:chip("month","月份",st.month&&mlabel(st.month)))+chip("type","类型",TYPE[st.type])+chip("category","分类",st.category)+chip("account","账户",st.account)+chip("currency","币种",st.currency)+`<button class="chip ${st.pend?"on":""}" data-pend="1">待确认</button>`}
-function listRes(keep){if(!keep)lim.list=PAGE;$("#chips").innerHTML=chipsHTML();const qc=$(".qclr");if(qc)qc.hidden=!st.q;const a=filtered();
- $("#res").innerHTML=`<div class="wrap"><div class="sf" style="padding-top:4px"><span id="cnt">${a.length}</span> 笔 · 支出 ${fmt(exOf(a))} · 收入 ${fmt(incOf(a))}</div>${curNote(a)}${a.length?days(a,g=>"支出 "+fmt(exOf(g)),lim.list)+more("list",a.length):E.length?
+function listRes(keep){if(keep==="h")pg=hashP();else if(!keep)pg=1;$("#chips").innerHTML=chipsHTML();const qc=$(".qclr");if(qc)qc.hidden=!st.q;const a=filtered(),np=Math.max(1,Math.ceil(a.length/PER));pg=Math.min(Math.max(1,pg),np);
+ {const want=pg>1?"#/list?p="+pg:"#/list";if(route()==="list"&&location.hash!==want)history.replaceState(history.state,"",want)}
+ $("#res").innerHTML=`<div class="wrap"><div class="sf" style="padding-top:4px"><span id="cnt">${a.length}</span> 笔 · 支出 ${fmt(exOf(a))} · 收入 ${fmt(incOf(a))}</div>${curNote(a)}${a.length?days(a,g=>"支出 "+fmt(exOf(g)),pg*PER,(pg-1)*PER)+pager(pg,np):E.length?
  empty('<span class="mag" style="transform:scale(2)"></span>',"没有找到结果",`没有符合${st.q?`“${esc(st.q)}”和`:""}当前筛选的记录。`,'<button class="btn sec" data-reset="1">清除筛选</button>'):
  empty('<span class="ti-list" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',"还没有记录","记账管家入账并发布后，记录会显示在这里。")}</div>`;
  const sh=$("#sheet"),was=!!sh.innerHTML;if(was&&!sheet)ghostOut(sh);sh.innerHTML=sheet?sheetHTML():"";if(!was&&sheet)sheetIn(sh)}
@@ -319,12 +322,14 @@ const ROUTES={home,list,subs,budget,report};const route=()=>location.hash.replac
 let lastRoute="";
 function render(){if(route()==="pending"){history.replaceState(null,"","#/subs")}const k=route(),fn=ROUTES[k]||home,changed=k!==lastRoute;lastRouteWas=lastRoute;if(k!==lastRoute&&$("#overlay").innerHTML){closeEntry()}lastRoute=k;if(k!=="list")$("#sheet").innerHTML="";
  $("#app").innerHTML=fn();const tk=k==="budget"?"home":k;document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.r===tk));
- subBadge();if(k==="list")listRes();trendScroll();layout();afterRender(k,changed)}
-const go=()=>{render();window.scrollTo(0,0)};
+ subBadge();if(k==="list")listRes("h");trendScroll();layout();afterRender(k,changed)}
+const go=()=>{if(route()==="list"&&lastRoute==="list"&&$("#res")){const n=hashP();if(n!==pg){pg=n;listRes(true);pageTop();return}}render();window.scrollTo(0,0)};
+function pageTop(){const r=$("#res");if(!r)return;const y=Math.max(0,r.getBoundingClientRect().top+scrollY-($(".top")?$(".top").getBoundingClientRect().height:0)-8);if(scrollY>y)scrollTo({top:y,behavior:RM.matches?"auto":"smooth"});
+ const w=$("#res .wrap");if(w)mv(w,[{opacity:.4,transform:"translateY(8px)"},{opacity:1,transform:"none"}],{d:240})}
 document.addEventListener("input",e=>{if(e.target.id==="q"){st.q=e.target.value;listRes()}});
 document.addEventListener("change",e=>{const f=e.target.dataset.f;if(f&&e.target.tagName==="SELECT"){st[f]=e.target.value;listRes()}});
 function shiftPeriod(d){if(rmode==="m"||route()!=="report"){const n=shiftYM(rym,d);if(d>0&&n>mxYM())return false;rym=n}else{const n=String(+ryr+d);if(d>0&&n>mxYM().slice(0,4))return false;ryr=n}const b=numsBefore();MV.period=true;render();animateNums(b);return true}
-document.addEventListener("click",e=>{const mb=e.target.closest("[data-more]");if(mb){const k=mb.dataset.more,y=scrollY;lim[k]+=PAGE;listRes(true);scrollTo(0,y);return}
+document.addEventListener("click",e=>{const pb=e.target.closest("[data-pg]");if(pb){if(pb.disabled)return;const n=pg+ +pb.dataset.pg;location.hash="#/list"+(n>1?"?p="+n:"");return}
  const b=e.target.closest("[data-m],[data-p],[data-now],[data-open],[data-close],[data-clr],[data-pend],[data-reset],[data-type],[data-cat],[data-drill],[data-refresh],[data-retry],[data-qclr],[data-eclose],[data-id],#newbar");if(!b)return;const d=b.dataset;
  if(b.id==="newbar")return applyPending();
  if(d.refresh!=null)return refresh();if(d.retry!=null)return boot();if(d.eclose!=null)return closeEntry();if(d.id!=null)return openFromRow(d.id,b.closest("#res .row,.row"));
@@ -352,7 +357,7 @@ class Locked extends Error{}
 async function currentKey(){if(KEY)return KEY;const k=await keyLoad();if(k&&k.key)KEY=k;return KEY}
 async function openEnc(enc){const K=await currentKey();if(!K)throw new Locked("locked");
  try{return await decryptWith(K,enc)}catch(e){KEY=null;await keyClear();throw new Locked("key no longer works")}}   // e.g. password changed
-function wipe(){rcRevoke();ghostsClear();MV.list=false;selId=null;{const p=$("#pane");if(p){p.innerHTML="";delete p.dataset.k}}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;MER=undefined;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;lim.list=PAGE;Object.assign(st,{q:"",payee:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
+function wipe(){rcRevoke();ghostsClear();MV.list=false;selId=null;{const p=$("#pane");if(p){p.innerHTML="";delete p.dataset.k}}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;MER=undefined;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;pg=1;Object.assign(st,{q:"",payee:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
  ["#app","#overlay","#sheet"].forEach(q=>{const el=$(q);if(el)el.innerHTML=""});const t=$("#toast");if(t){t.textContent="";t.classList.remove("show")}
  const nb=$("#newbar");if(nb)nb.hidden=true;const c=$("#pcnt");if(c){c.hidden=true;c.textContent=""}document.body.style.overflow=""}
 async function lock(){KEY=null;wipe();await keyClear();showUnlock()}
