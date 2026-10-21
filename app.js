@@ -67,7 +67,7 @@ function budget(){const ym=rym,m=base(E.filter(r=>r.ym===ym&&r.type==="expense")
 // ---- list + filter sheet
 const st={q:"",payee:"",scope:"",dest:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false};let sheet=false;
 const uniq=k=>[...new Set(E.map(r=>r[k]).filter(Boolean))].sort();
-function filtered(){const q=st.q.trim().toLowerCase();return sorted(E.filter(r=>(!st.payee||r.payee===st.payee)&&(!st.dest||isRide(r)&&rideDest(r)===st.dest)&&(st.scope!=="store"||!STORE_SKIP.has(r.category))&&(!st.month||r.ym===st.month)&&(!st.day||r.d===st.day)&&(!st.type||r.type===st.type)&&(!st.category||r.category===st.category)&&(!st.account||r.account===st.account)&&(!st.currency||r.currency===st.currency)&&(!st.pend||isPend(r))
+function filtered(){const q=st.q.trim().toLowerCase();return sorted(E.filter(r=>(!st.payee||r.payee===st.payee)&&(!st.dest||isRide(r)&&destKey(rideDest(r))===destKey(st.dest))&&(st.scope!=="store"||!STORE_SKIP.has(r.category))&&(!st.month||r.ym===st.month)&&(!st.day||r.d===st.day)&&(!st.type||r.type===st.type)&&(!st.category||r.category===st.category)&&(!st.account||r.account===st.account)&&(!st.currency||r.currency===st.currency)&&(!st.pend||isPend(r))
  &&qMatch(r,q)))}
 // search: space-separated tokens, all must match. A token matches the payee / note / category / account text, or the amount:
 // "2900" "¥2,900" "2,900円" = amount equals (text containing the digits also matches); ">5000" "<=1000" "1000-3000" = amount range.
@@ -240,16 +240,27 @@ const RIDE_CAT=new Set(["交通","打车"]),RIDE_KW=/uber|taxi|タクシー|出�
 const isRide=r=>r.type==="expense"&&!r.deleted&&RIDE_CAT.has(r.category)&&!EATS_KW.test((r.payee||"")+" "+(r.note||""))&&(r.category==="打车"||RIDE_KW.test((r.payee||"")+" "+(r.note||"")));
 // accepted arrows: → ⟶ ➝ ➔ ➜ ➞ ⇒ -> => －＞ (also route-like 「到」, see daoDest; NOT ～ ~ 至 or a bare dash)
 const ARROW=/\s*(?:→|⟶|➝|➔|➜|➞|⇒|-+>|=>|－＞)\s*/;
-// 「到」 routes: "A到B", "到 B", "打车：到 X". Not route-like: 到账/到期/到货/到手/到位, 收到/得到/做到/想到/遇到/见到/感到/拿到/接到/找到/听到/看到
-const DAO_NEXT=/[账期货手位]/,DAO_PREV=/[收得做想遇见感拿接找听看]/,CUT=/[；;，,。（(\n|｜]/;
-const normDest=d=>d.replace(/\s+/g," ").trim();
-function daoDest(t){let out=null;for(let i=t.indexOf("到");i>=0;i=t.indexOf("到",i+1)){if(DAO_NEXT.test(t[i+1]||"")||DAO_PREV.test(t[i-1]||""))continue;
- const d=normDest(t.slice(i+1).replace(/^[\s：:]+/,"").split(CUT)[0]);if(d)out=d}return out}   // last route-like 到 wins (multi-leg → final stop, like arrows)
+// 「到」 routes: "A到B", "到 B", "打车：到 X", and the arrival verb 「到达 X」. Not route-like: 到账/到期/到货/到手/到位/到了/到底/到处/到时/到点/到来,
+// 收到/得到/做到/想到/遇到/见到/感到/拿到/接到/找到/听到/看到/迟到/直到/等到/不到/没到
+const DAO_NEXT=/[账期货手位了底处时点来]/,DAO_PREV=/[收得做想遇见感拿接找听看迟直等不没]/,CUT=/[；;，,。（(\n|｜]/;
+// Remark cut (b8, QA 536f00b): after B, stop at 备注/备忘/注：/※ anywhere, or at whitespace followed by one of a few
+// remark words (REMARK_WORDS). A space followed by other CJK text is part of the name (東京駅 八重洲口, 羽田空港 第3ターミナル, 2-1-1 丸の内).
+// '#' and ' - ' are NOT separators (Gate#5, Building - North).
+const REMARK_WORDS=["晚上","早上","凌晨","深夜","回家","加班","加价"];
+const REMARK=new RegExp("\\s*(?:备注|备忘|注[：:]|※)|[\\s\\u3000]+(?="+REMARK_WORDS.join("|")+")");
+const normDest=d=>d.split(CUT)[0].split(REMARK)[0].replace(/[\s\u3000]+/g," ").trim();
+// grouping key: NFKC + case-fold + collapsed whitespace; the card shows the form from the latest ride
+const destKey=d=>d==null?null:d.normalize("NFKC").toLowerCase().replace(/\s+/g," ").trim();
+// 到达 is the arrival verb only for the FIRST marker ("到达 X", "从机场到达酒店"); later 到达 is part of a name (机场到达层),
+// and a B that itself starts with 到 (到 到达大厅) is kept whole. Later plain 到 still starts a new leg (A到B到C → C).
+function daoDest(t){let out=null,first=true;for(let i=t.indexOf("到");i>=0;i=t.indexOf("到",i+1)){let k=i+1;
+ if(t[k]==="达"){if(!first)continue;k++}else if(DAO_NEXT.test(t[k]||""))continue;if(DAO_PREV.test(t[i-1]||""))continue;
+ while(k<t.length&&/[\s：:]/.test(t[k]))k++;const d=normDest(t.slice(k));first=false;if(d)out=d;if(t[k]==="到")i=k}return out}
 function rideDest(r){for(const t of [r.note,r.summary]){if(!t||typeof t!=="string")continue;const parts=t.split(ARROW);
- if(parts.length>=2&&parts[parts.length-2].trim()){const d=normDest(parts[parts.length-1].split(CUT)[0]);if(d)return d;continue}
+ if(parts.length>=2){for(let k=parts.length-1;k>=1;k--){const d=normDest(parts[k]);if(d)return d}continue}   // last non-empty stop; "→B" (no origin) OK
  const d=daoDest(t);if(d)return d}return null}
 function rideStats(ym){const rs=E.filter(r=>r.ym===ym&&r.currency===BASE&&isRide(r)),by={};let miss=0;
- rs.forEach(r=>{const d=rideDest(r);if(!d){miss++;return}const o=by[d]||(by[d]={dest:d,n:0,amt:0,last:""});o.n++;o.amt+=r.amount;if(r.d>o.last)o.last=r.d});
+ rs.forEach(r=>{const d=rideDest(r);if(!d){miss++;return}const k=destKey(d),o=by[k]||(by[k]={dest:d,n:0,amt:0,last:""});o.n++;o.amt+=r.amount;if(r.d>=o.last){o.last=r.d;o.dest=d}});
  return {top:Object.values(by).sort((x,y)=>y.n-x.n||y.amt-x.amt||y.last.localeCompare(x.last)||x.dest.localeCompare(y.dest)).slice(0,3),miss,total:rs.length}}
 function ridesCard(ym){const R=rideStats(ym);
  const rows=R.top.map((o,j)=>`<button class="rd-row" data-jdest="${esc(o.dest)}" data-jm="${ym}" data-n="${o.n}" data-amt="${o.amt}"><span class="st-rk num">${j+1}</span><span class="rd-d">${esc(o.dest)}</span><span class="st-v num"><b>${o.n} 次</b><small>${fmt(o.amt)}</small></span></button>`).join("");

@@ -42,3 +42,6 @@ test_b7a.py
 test_b7b.py
 test_b7_repro.py
 darkaudit.py
+b8_repro.js
+test_b8.py
+b8b_repro.js
