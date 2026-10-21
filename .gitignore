@@ -33,3 +33,4 @@ receipts/
 .receipts_manifest.json
 test_b4b.py
 mk_receipt_fixture.py
+test_statusbar.py
