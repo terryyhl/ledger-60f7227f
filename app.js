@@ -40,9 +40,19 @@ const mxYM=()=>E.reduce((m,r)=>r.ym>m?r.ym:m,nowYM());
 function period(){const isM=rmode==="m"||!location.hash.includes("report"),cur=isM?rym:ryr,now=isM?nowYM():nowYM().slice(0,4),lim=isM?rym<mxYM():ryr<mxYM().slice(0,4);
  return `<div class="period" style="display:flex;align-items:center;justify-content:space-between;margin:4px -8px 0"><button class="nb" data-p="-1" aria-label="上一期" style="font-size:24px">‹</button><b style="font-size:17px" id="rp">${isM?rym.replace("-","年").replace(/年0?/,"年")+"月":ryr+"年"}</b><span style="display:flex">${cur!==now?`<button class="nb" data-now="1">${isM?"本月":"今年"}</button>`:""}<button class="nb" data-p="1" aria-label="下一期" style="font-size:24px;${lim?"":"color:var(--dis)"}" ${lim?"":"disabled"}>›</button></span></div>`}
 // ---- home
+// ---- b9 固定 vs 日常: 固定 = 家政 + 订阅 (FIXED), everything else 日常. Scope per surface, persisted (localStorage: "all"|"daily"|"fixed" only).
+const SC_L={all:"全部",daily:"日常",fixed:"固定"};
+const scGet=k=>{try{const v=localStorage.getItem("ledger.scope."+k);return SC_L[v]?v:"all"}catch{return "all"}};
+let HS=scGet("home"),TS=scGet("trend");
+const inScope=(r,sc)=>sc==="all"||r.type!=="expense"||(sc==="fixed")===FIXED.has(r.category);
+const scSeg=(k,v)=>`<div class="seg sc-seg" id="${k}-scope" role="group" aria-label="固定/日常">${Object.entries(SC_L).map(([x,l])=>`<button data-sc="${k}" data-v="${x}" class="${v===x?"on":""}" aria-pressed="${v===x}">${l}</button>`).join("")}</div>`;
+function homeSummary(ym,m,ex,inc,dd){if(HS==="all")return `<div class="summary"><div class="lbl">${mlabel(ym)}支出</div><div class="big num" id="t-ex">${fmt(ex)}</div><div class="three"><div><small>收入</small><b class="num" id="t-inc" style="color:var(--green)">${fmt(inc)}</b></div><div><small>结余</small><b class="num" id="t-bal">${fmt(inc-ex)}</b></div><div><small>日均</small><b class="num">${fmt(Math.round(ex/dd))}</b></div></div></div>`;
+ const a=m.filter(r=>r.type==="expense"&&inScope(r,HS)),x=exOf(a);
+ return `<div class="summary" data-scope="${HS}"><div class="lbl">${mlabel(ym)}${SC_L[HS]}支出</div><div class="big num" id="t-ex">${fmt(x)}</div><div class="three"><div><small>占总支出</small><b class="num" id="t-share">${ex?(x/ex*100).toFixed(1)+"%":"—"}</b></div><div><small>日均</small><b class="num">${fmt(Math.round(x/dd))}</b></div><div><small>笔数</small><b class="num" id="t-cnt">${base(a).length}</b></div></div></div>`}
 function home(){const ym=rym,m=E.filter(r=>r.ym===ym),ex=exOf(m),inc=incOf(m),dd=ym===nowYM()?+today().slice(8):ym<nowYM()?new Date(+ym.slice(0,4),+ym.slice(5),0).getDate():1;
  return navbar(`${ym===nowYM()?"本月":mlabel(ym)}概览`)+`<div class="wrap">${period()}
- <div class="summary"><div class="lbl">${mlabel(ym)}支出</div><div class="big num" id="t-ex">${fmt(ex)}</div><div class="three"><div><small>收入</small><b class="num" id="t-inc" style="color:var(--green)">${fmt(inc)}</b></div><div><small>结余</small><b class="num" id="t-bal">${fmt(inc-ex)}</b></div><div><small>日均</small><b class="num">${fmt(Math.round(ex/dd))}</b></div></div></div>${curNote(m)}
+ ${scSeg("home",HS)}
+ ${homeSummary(ym,m,ex,inc,dd)}${curNote(m)}
  ${mtd(ym)}
  ${insightsCard(ym)}
  ${homeSubs()}
@@ -130,7 +140,7 @@ function trendMonths(range){const end=rmode==="m"?rym:(ryr===nowYM().slice(0,4)?
  const n=+range;return [...Array(n)].map((_,i)=>shiftYM(end,i-n+1))}
 function trendData(range=TR.range){const ms=trendMonths(range),idx={};ms.forEach((m,i)=>idx[m]=i);idx[shiftYM(ms[0],-1)]=-1;
  const by={},prev={},other={};
- for(const r of E){if(r.type!=="expense"||r.deleted)continue;const i=idx[r.ym];if(i===undefined)continue;
+ for(const r of E){if(r.type!=="expense"||r.deleted||!inScope(r,TS))continue;const i=idx[r.ym];if(i===undefined)continue;
   if(r.currency!=="JPY"){if(i>=0)other[r.currency]=(other[r.currency]||0)+r.amount;continue}
   const c=r.category||"未分类";if(i<0){prev[c]=(prev[c]||0)+r.amount;continue}(by[c]=by[c]||ms.map(()=>0))[i]+=r.amount}
  const cats=Object.keys(by).sort((a,b)=>sumA(by[b])-sumA(by[a])||a.localeCompare(b));
@@ -162,8 +172,8 @@ function trendCard(){const T=trendData(),vis=T.cats.filter(c=>!TR.off.has(c)),n=
  const mv=rows.map(r=>({...r,d:r.v-r.p})),up=mv.filter(r=>r.d>0).sort((a,b)=>b.d-a.d)[0],dn=mv.filter(r=>r.d<0).sort((a,b)=>a.d-b.d)[0];
  const mover=(t,r,id)=>`<div class="tr-mv" id="${id}"><small>${t}</small>${r?`<b><i style="background:${colorOf(r.c)}"></i>${esc(r.c)}</b><span class="num">${r.d>0?"+":"-"}${fmt(Math.abs(r.d))} · ${pctTxt(r.v,r.p)}</span>`:`<b>—</b><span class="num">—</span>`}</div>`;
  const ok=Object.keys(T.other);
- return `<div class="card" id="trend"><h2>分类趋势图<small>${mlabel(T.ms[0])}–${mlabel(T.ms[n-1])} · JPY 支出</small></h2>
- <div class="seg tr-seg">${segs}</div>${trendSVG(T,vis,si)}
+ return `<div class="card" id="trend" data-scope="${TS}"><h2>分类趋势图<small>${mlabel(T.ms[0])}–${mlabel(T.ms[n-1])} · ${TS==="all"?"":SC_L[TS]+" "}JPY 支出</small></h2>
+ <div class="seg tr-seg">${segs}</div>${scSeg("trend",TS)}${trendSVG(T,vis,si)}
  <div class="tr-chips">${chips||'<span class="sub" style="font-size:13px">这段时间没有 JPY 支出</span>'}</div>${det}
  <div class="tr-mvs">${mover("涨得最多",up,"tr-up")}${mover("降得最多",dn,"tr-dn")}</div>
  ${ok.length?`<div class="cur" id="tr-other">其他币种支出（不换算，未计入图表）：${ok.map(c=>fmt(T.other[c],c)).join(" · ")}</div>`:""}</div>`}
@@ -235,6 +245,8 @@ function storesCard(ym){if(MER===undefined)return `<div class="card" id="stores"
  const part=(t,a,k,id)=>`<div class="st-part" id="${id}"><div class="st-h">${t}</div>${a.map((o,j)=>storeRow(o,j+1,k,ym)).join("")}</div>`;
  const body=S.visits.length?part("去得最多",S.visits,"v","st-visits")+part("花得最多",S.spend,"s","st-spend"):`<div class="st-empty" id="st-empty">${mlabel(ym)}还没有${on?"":"线下"}常去的店${S.hidden&&!on?`<br><small>${S.hidden} 家线上商户未计入</small>`:""}</div>`;
  return `<div class="card" id="stores"><h2>常去的店<small>${MER===null?"地址暂不可用":"按天计次 · JPY"}</small></h2>${body}${sw}</div>`}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-sc]");if(!b)return;const k=b.dataset.sc,v=b.dataset.v;try{localStorage.setItem("ledger.scope."+k,v)}catch{}
+ if(k==="home"){HS=v;const y=scrollY;render();scrollTo(0,y)}else{TS=v;TR.sel=null;trendRedraw()}});
 document.addEventListener("change",e=>{if(e.target.id!=="st-online")return;try{localStorage.setItem(MER_ON,e.target.checked?"1":"0")}catch{}const el=$("#stores");if(el)el.outerHTML=storesCard(rym)});
 // ---- 打车最常去的地方: ride entries (Uber/taxi, 交通/打车; never food delivery), destination = B of "A→B" in note/summary
 const RIDE_CAT=new Set(["交通","打车"]),RIDE_KW=/uber|taxi|タクシー|出租|打车|滴滴|didi|lyft|grab|s\.ride|go\s*taxi/i,EATS_KW=/eats|外卖|出前|デリバリー|deliver|wolt|饿了么|美团|menu/i;
@@ -310,7 +322,7 @@ function openSub(i){const it=(SUBS.items||[])[i];if(!it)return;const rows=sorted
 document.addEventListener("click",e=>{const r=e.target.closest("[data-sub]");if(r)openSub(+r.dataset.sub)});
 // ---- batch 2: calendar heatmap, month-to-date, chart → list jumps
 const dimYM=ym=>new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5),0)).getUTCDate();
-const dayEx=ym=>{const o={};for(const r of E)if(r.ym===ym&&r.type==="expense"&&r.currency==="JPY")o[r.d]=(o[r.d]||0)+r.amount;return o};
+const dayEx=ym=>{const o={};for(const r of E)if(r.ym===ym&&r.type==="expense"&&r.currency==="JPY"&&inScope(r,HS))o[r.d]=(o[r.d]||0)+r.amount;return o};
 function heatLevel(v,mx){if(!v)return 0;const f=v/mx;return f>.75?4:f>.5?3:f>.25?2:1}
 function heatmap(ym){const o=dayEx(ym),n=dimYM(ym),first=new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5)-1,1)).getUTCDay(),td=today(),vals=Object.values(o),mx=Math.max(1,...vals);
  let cells="";for(let i=0;i<first;i++)cells+=`<span class="hm-pad"></span>`;
@@ -321,7 +333,7 @@ function heatmap(ym){const o=dayEx(ym),n=dimYM(ym),first=new Date(Date.UTC(+ym.s
  <div class="hm-wd">${[...WD].map(w=>`<span>${w}</span>`).join("")}</div><div class="hm">${cells}</div>
  <div class="hm-lg"><span>少</span>${[0,1,2,3,4].map(l=>`<i class="l${l}"></i>`).join("")}<span>多</span><span style="flex:1"></span><span>点日期查看当天明细</span></div></div>`}
 function mtd(ym){const isNow=ym===nowYM(),n=isNow?+today().slice(8):dimYM(ym),pm=shiftYM(ym,-1),pn=Math.min(n,dimYM(pm));
- const s=(m,k)=>sum(E.filter(r=>r.ym===m&&r.type==="expense"&&r.currency==="JPY"&&+r.d.slice(8)<=k)),cur=s(ym,n),prev=s(pm,pn),d=cur-prev;
+ const s=(m,k)=>sum(E.filter(r=>r.ym===m&&r.type==="expense"&&r.currency==="JPY"&&inScope(r,HS)&&+r.d.slice(8)<=k)),cur=s(ym,n),prev=s(pm,pn),d=cur-prev;
  const note=n>pn?`（上月只有 ${pn} 天）`:"";
  return `<div class="mtd" id="mtd" data-cur="${cur}" data-prev="${prev}" data-n="${n}" data-pn="${pn}"><div><small>${isNow?`本月至今 1–${n}日`:`${mlabel(ym)} 1–${n}日`}</small><b class="num">${fmt(cur)}</b></div>
  <div><small>上月同期 ${mlabel(pm)} 1–${pn}日${note}</small><b class="num">${fmt(prev)}</b></div>

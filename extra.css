@@ -229,3 +229,6 @@ html{background:var(--bg)}
 .ins-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);flex:0 0 8px}
 .ins .chev{color:var(--ter);font-weight:400}
 @media (prefers-reduced-motion:no-preference){.ins button.ins-r{transition:transform .2s var(--spr)}.ins button.ins-r:active{transform:scale(.98)}}
+/* B9: 固定/日常 segmented control (44px hit height) */
+.sc-seg{margin:12px 0 8px}
+#trend .sc-seg{margin:8px 0}
