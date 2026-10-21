@@ -1,0 +1,15 @@
+test_app.py
+shots/
+__pycache__/
+test_v2.py
+icons/preview/
+test_ptr.py
+test_qa.py
+icons/mk.py
+serve_tests.sh
+test_ios.py
+test_trend.py
+test_subs.py
+test_crypto.py
+data/*.json
+!data/*.enc.json

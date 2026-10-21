@@ -1,0 +1,302 @@
+"use strict";
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const SYM={JPY:"¥",CNY:"CN¥",USD:"$",EUR:"€",HKD:"HK$",GBP:"£"};
+const fmt=(v,c="JPY")=>{const d=c==="JPY"?0:2;return (v<0?"-":"")+(SYM[c]||c+" ")+Math.abs(Number(v)).toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d})};
+const CATC={"餐饮":"var(--orange)","交通":"var(--blue)","购物":"var(--pink)","娱乐":"var(--purple)","居住":"var(--indigo)","医疗":"var(--red)","通讯":"var(--teal)","订阅":"var(--mint)","健身":"var(--green)","工资":"var(--green)","收入":"var(--green)"};
+const PAL=["var(--orange)","var(--blue)","var(--pink)","var(--purple)","var(--indigo)","var(--teal)","var(--green)","var(--brown)","var(--yellow)"];
+let colorMap={};const colorOf=c=>CATC[c]||colorMap[c]||"var(--gray)";
+const TYPE={expense:"支出",income:"收入",transfer:"转账"},WD="日一二三四五六";
+let E=[],BUD=null,BASE="JPY";const pad=n=>String(n).padStart(2,"0");
+const TZF=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"});
+function tokyo(dt){dt=String(dt||"");const t=/(Z|[+-]\d\d:?\d\d)$/.test(dt)?Date.parse(dt):NaN;
+ if(isNaN(t)){const m=dt.replace(" ","T");return {d:m.slice(0,10),hm:m.slice(11,16)}}
+ const o={};TZF.formatToParts(new Date(t)).forEach(p=>o[p.type]=p.value);return {d:`${o.year}-${o.month}-${o.day}`,hm:`${o.hour}:${o.minute}`}}
+const today=()=>tokyo(new Date().toISOString()).d,nowYM=()=>today().slice(0,7);
+const conf=r=>r.confidence==null||r.confidence===""||isNaN(+r.confidence)?1:+r.confidence;
+const isPend=r=>conf(r)<0.8;
+function norm(r){const t=tokyo(r.datetime);const {attachment,...rest}=r;return {...rest,amount:Math.abs(+r.amount||0),currency:r.currency||"JPY",d:t.d,ym:t.d.slice(0,7),y:t.d.slice(0,4),hm:t.hm,key:t.d+"T"+t.hm+"|"+r.datetime}}
+const base=a=>a.filter(r=>r.currency===BASE),sum=a=>a.reduce((s,r)=>s+r.amount,0);
+const exOf=a=>sum(base(a).filter(r=>r.type==="expense")),incOf=a=>sum(base(a).filter(r=>r.type==="income"));
+const groupBy=(a,k)=>a.reduce((o,r)=>((o[r[k]]=o[r[k]]||[]).push(r),o),{});
+const sorted=a=>[...a].sort((x,y)=>y.key<x.key?-1:y.key>x.key?1:0);
+const mlabel=ym=>+ym.slice(5)+"月",dlabel=d=>`${+d.slice(5,7)}月${+d.slice(8)}日 周${WD[new Date(d+"T12:00:00Z").getUTCDay()]}`;
+function curNote(a){const o={};a.filter(r=>r.currency!==BASE&&r.type!=="transfer").forEach(r=>{const c=o[r.currency]=o[r.currency]||{ex:0,inc:0};c[r.type==="income"?"inc":"ex"]+=r.amount});
+ const k=Object.keys(o);return k.length?`<div class="cur" id="other-cur">其他币种（单独汇总，不换算，未计入 ${BASE} 合计）：${k.map(c=>`${c} 支出 ${fmt(o[c].ex,c)} · 收入 ${fmt(o[c].inc,c)}`).join("；")}</div>`:""}
+function txRow(r){const s=r.type==="income"?"+":r.type==="transfer"?"":"-";
+ return `<div class="row tall" role="button" tabindex="0" data-id="${esc(r.id)}"><span class="badge" style="background:${r.type==="transfer"?"var(--gray)":colorOf(r.category)}">${esc((r.type==="transfer"?"转":r.category||"·").slice(0,1))}</span>
+ <div class="m"><div class="p">${esc(r.payee||r.category||"—")}${isPend(r)?'<span class="tag">待确认</span>':""}</div><div class="n">${esc([r.hm,r.type==="transfer"?"转账":r.category,r.account].filter(Boolean).join(" · "))}</div></div>
+ <span class="amt num ${r.type==="income"?"in":""}">${s}${fmt(r.amount,r.currency)}</span></div>`}
+const PAGE=200;let lim={list:PAGE};
+const more=(k,n)=>n>lim[k]?`<button class="btn sec more" data-more="${k}" style="margin-top:16px">再显示 ${Math.min(PAGE,n-lim[k])} 笔（还有 ${n-lim[k]} 笔）</button>`:"";
+function days(a,right,n=Infinity){const full=groupBy(a,"d"),g=groupBy(sorted(a).slice(0,n),"d");return Object.keys(g).sort().reverse().map(d=>`<div class="sh" style="display:flex;justify-content:space-between;text-transform:none"><span>${dlabel(d)}</span><span class="num">${right(full[d])}</span></div><div class="group ic-rows">${sorted(g[d]).map(txRow).join("")}</div>`).join("")}
+const RICON='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>';
+let lastUpd=null;const updText=()=>lastUpd?"更新于 "+tokyo(new Date(lastUpd).toISOString()).hm:"";
+const navbar=(t,l="",inner="")=>`<div class="top">${l?`<div class="navbar">${l}</div>`:""}<div class="lt"><h1>${t}</h1><span class="upd">${updText()}</span><button class="nb rbtn${busy?" spin":""}" data-refresh="1" aria-label="刷新">${RICON}</button>${route()==="home"?'<button class="nb lockbtn" data-lock="1" aria-label="锁定">锁定</button>':""}</div>${inner}</div>`;
+const empty=(art,h,p,btn="")=>`<div class="empty"><div class="art">${art}</div><h3>${h}</h3><p>${p}</p>${btn}</div>`;
+const mxYM=()=>E.reduce((m,r)=>r.ym>m?r.ym:m,nowYM());
+function period(){const isM=rmode==="m"||!location.hash.includes("report"),cur=isM?rym:ryr,now=isM?nowYM():nowYM().slice(0,4),lim=isM?rym<mxYM():ryr<mxYM().slice(0,4);
+ return `<div class="period" style="display:flex;align-items:center;justify-content:space-between;margin:4px -8px 0"><button class="nb" data-p="-1" aria-label="上一期" style="font-size:24px">‹</button><b style="font-size:17px" id="rp">${isM?rym.replace("-","年").replace(/年0?/,"年")+"月":ryr+"年"}</b><span style="display:flex">${cur!==now?`<button class="nb" data-now="1">${isM?"本月":"今年"}</button>`:""}<button class="nb" data-p="1" aria-label="下一期" style="font-size:24px;${lim?"":"color:var(--ter)"}" ${lim?"":"disabled"}>›</button></span></div>`}
+// ---- home
+function home(){const ym=rym,m=E.filter(r=>r.ym===ym),ex=exOf(m),inc=incOf(m),dd=ym===nowYM()?+today().slice(8):ym<nowYM()?new Date(+ym.slice(0,4),+ym.slice(5),0).getDate():1;
+ return navbar(`${ym===nowYM()?"本月":mlabel(ym)}概览`)+`<div class="wrap">${period()}
+ <div class="summary"><div class="lbl">${mlabel(ym)}支出</div><div class="big num" id="t-ex">${fmt(ex)}</div><div class="three"><div><small>收入</small><b class="num" id="t-inc" style="color:var(--green)">${fmt(inc)}</b></div><div><small>结余</small><b class="num" id="t-bal">${fmt(inc-ex)}</b></div><div><small>日均</small><b class="num">${fmt(Math.round(ex/dd))}</b></div></div></div>${curNote(m)}
+ ${homeSubs()}
+ ${homeBudget(ym,ex)}
+ <div class="sh" style="display:flex;justify-content:space-between"><span>最近 10 笔</span><a class="link" href="#/list" style="text-transform:none;text-decoration:none">全部</a></div>
+ ${E.length?`<div class="group ic-rows" id="recent">${sorted(E).slice(0,10).map(txRow).join("")}</div>`:empty('<span class="ti-list" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',"还没有记录","记账管家入账并发布后，记录会显示在这里。")}</div>`}
+const total=()=>BUD&&BUD.monthly?+(BUD.monthly[BASE]||0):0;
+function homeBudget(ym,ex){const T=total();if(!T)return "";const left=ym===nowYM()?new Date(+ym.slice(0,4),+ym.slice(5),0).getDate()-+today().slice(8):0;
+ return `<div class="sh">预算</div><div class="group" id="budget"><div class="row" style="flex-direction:column;align-items:stretch;padding:12px 16px;gap:8px"><div style="display:flex;justify-content:space-between"><span>本月预算</span><span class="sub num">${fmt(ex)} / ${fmt(T)}</span></div>${track(ex/T)}<div class="n sub" style="font-size:13px">${ex>T?`超支 ${fmt(ex-T)}`:`剩余 ${fmt(T-ex)}`} · 还有 ${left} 天 · 已用 ${(ex/T*100).toFixed(1)}%</div></div><a class="row" href="#/budget"><span class="m p">查看分类预算</span><span class="chev"></span></a></div>`}
+const track=(p,h)=>`<div class="track"${h?` style="height:${h}px"`:""}><i class="${p>1?"over":p>=.7?"warn":""}" style="width:${Math.min(100,p*100).toFixed(1)}%"></i></div>`;
+// ---- budget
+function budget(){const ym=rym,m=base(E.filter(r=>r.ym===ym&&r.type==="expense")),ex=sum(m),T=total(),cats=Object.entries((BUD&&BUD.categories)||{});
+ const back=`<a class="nb" href="#/"><span class="chev" style="transform:rotate(-135deg) scale(.8);border-color:var(--blue)"></span>首页</a>`;
+ if(!T&&!cats.length)return navbar(`${mlabel(ym)}预算`,back)+empty('<span class="ti-chart" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',"未设置预算","预算由记账管家在数据中设置。");
+ const left=ym===nowYM()?new Date(+ym.slice(0,4),+ym.slice(5),0).getDate()-+today().slice(8)+1:1;
+ return navbar(`${mlabel(ym)}预算`,back)+`<div class="wrap">${period()}${T?`<div class="summary" id="budget"><div class="lbl">总预算${ex>T?"超支":"剩余"}</div><div class="big num">${fmt(Math.abs(T-ex))}</div>${track(ex/T,8)}<div class="three" style="margin-top:12px"><div><small>已用 ${(ex/T*100).toFixed(1)}%</small><b class="num">${fmt(ex)}</b></div><div><small>预算</small><b class="num">${fmt(T)}</b></div><div><small>可日均</small><b class="num">${fmt(Math.max(0,Math.round((T-ex)/left)))}</b></div></div></div>`:""}
+ ${cats.length?`<div class="sh">分类预算</div><div class="group ic-rows">${cats.map(([c,v])=>{v=+v;const u=sum(m.filter(r=>r.category===c)),p=v?u/v:0;
+ return `<div class="row bud" data-bcat="${esc(c)}" data-used="${u}" style="padding:12px 16px;gap:12px"><span class="badge" style="background:${colorOf(c)}">${esc(c.slice(0,1))}</span><div class="m" style="padding:0"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>${esc(c)}</span><span class="sub num" style="font-size:15px">${fmt(u)} / ${fmt(v)} · ${(p*100).toFixed(1)}%${u>v?` 超支 ${fmt(u-v)}`:""}</span></div>${track(p)}</div></div>`}).join("")}</div>`:""}
+ <div class="sf">超出预算显示红色，达到 70% 显示橙色。预算由记账管家设置，只统计 ${BASE} 支出。</div></div>`}
+// ---- list + filter sheet
+const st={q:"",month:"",type:"",category:"",account:"",currency:"",pend:false};let sheet=false;
+const uniq=k=>[...new Set(E.map(r=>r[k]).filter(Boolean))].sort();
+function filtered(){const q=st.q.trim().toLowerCase();return sorted(E.filter(r=>(!st.month||r.ym===st.month)&&(!st.type||r.type===st.type)&&(!st.category||r.category===st.category)&&(!st.account||r.account===st.account)&&(!st.currency||r.currency===st.currency)&&(!st.pend||isPend(r))
+ &&(!q||[r.payee,r.note,r.category].join(" ").toLowerCase().includes(q))))}
+const anyF=()=>st.q||st.month||st.type||st.category||st.account||st.currency||st.pend;
+function chip(k,label,val){return val?`<button class="chip on" data-clr="${k}">${esc(val)} <span class="x">✕</span></button>`:`<button class="chip dd" data-open="1">${label}</button>`}
+function list(){return navbar("明细","",`<div class="search-hit"><label class="search"><span class="mag"></span><input id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="搜索商户、备注或分类" value="${esc(st.q)}"><button class="qclr" data-qclr="1" aria-label="清除搜索"${st.q?"":" hidden"}>✕</button></label></div>
+ <div class="chips" id="chips"></div>`)+`<div id="res"></div>`}
+function chipsHTML(){return chip("month","月份",st.month&&mlabel(st.month))+chip("type","类型",TYPE[st.type])+chip("category","分类",st.category)+chip("account","账户",st.account)+chip("currency","币种",st.currency)+`<button class="chip ${st.pend?"on":""}" data-pend="1">待确认</button>`}
+function listRes(keep){if(!keep)lim.list=PAGE;$("#chips").innerHTML=chipsHTML();const qc=$(".qclr");if(qc)qc.hidden=!st.q;const a=filtered();
+ $("#res").innerHTML=`<div class="wrap"><div class="sf" style="padding-top:4px"><span id="cnt">${a.length}</span> 笔 · 支出 ${fmt(exOf(a))} · 收入 ${fmt(incOf(a))}</div>${curNote(a)}${a.length?days(a,g=>"支出 "+fmt(exOf(g)),lim.list)+more("list",a.length):E.length?
+ empty('<span class="mag" style="transform:scale(2)"></span>',"没有找到结果",`没有符合${st.q?`“${esc(st.q)}”和`:""}当前筛选的记录。`,'<button class="btn sec" data-reset="1">清除筛选</button>'):
+ empty('<span class="ti-list" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',"还没有记录","记账管家入账并发布后，记录会显示在这里。")}</div>`;
+ $("#sheet").innerHTML=sheet?sheetHTML():""}
+const sel=(k,label,vals,lab=v=>v)=>`<div class="row sel"><span class="m">${label}</span><span class="v">${esc(st[k]?lab(st[k]):"全部")}</span><span class="chev"></span><select data-f="${k}" aria-label="${label}"><option value="">全部</option>${vals.map(v=>`<option value="${esc(v)}"${st[k]===v?" selected":""}>${esc(lab(v))}</option>`).join("")}</select></div>`;
+function sheetHTML(){return `<div class="dim" data-close="1"></div><div class="sheet"><div class="grab"></div><div class="navbar"><button class="nb" data-reset="1">重置</button><span class="t">筛选</span><button class="nb b" data-close="1">完成</button></div><div class="body" style="padding:0 16px 24px">
+ <div class="sh">月份</div><div class="group">${sel("month","月份",uniq("ym").reverse(),v=>v.replace("-","年")+"月")}</div>
+ <div class="sh">类型</div><div class="seg-hit"><div class="seg">${[["","全部"],["expense","支出"],["income","收入"],["transfer","转账"]].map(([v,l])=>`<button data-type="${v}" class="${st.type===v?"on":""}">${l}</button>`).join("")}</div></div>
+ <div class="sh">分类</div><div style="display:flex;flex-wrap:wrap;gap:0 8px">${uniq("category").map(c=>`<button class="chip ${st.category===c?"on":""}" data-cat="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+ <div class="sh">账户 · 币种</div><div class="group">${sel("account","账户",uniq("account"))}${sel("currency","币种",uniq("currency"))}<div class="row" data-pend="1" style="cursor:pointer"><span class="m">仅看待确认</span><span class="sw ${st.pend?"on":""}"></span></div></div>
+ <div style="padding-top:20px"><button class="btn" data-close="1">显示 ${filtered().length} 笔结果</button></div></div></div>`}
+// ---- report
+let rmode="m",rym=nowYM(),ryr=rym.slice(0,4);
+const shiftYM=(ym,d)=>{let [y,m]=ym.split("-").map(Number);m+=d;while(m<1){m+=12;y--}while(m>12){m-=12;y++}return y+"-"+pad(m)};
+function donut(parts,T){let off=0;return `<svg viewBox="0 0 36 36" width="120" height="120" style="flex:0 0 120px;transform:rotate(-90deg)">${parts.map(p=>{const L=p.v/T*100,s=`<circle cx="18" cy="18" r="15.9155" fill="none" stroke="${p.c}" stroke-width="4.2" stroke-dasharray="${L.toFixed(3)} ${(100-L).toFixed(3)}" stroke-dashoffset="${(-off).toFixed(3)}"/>`;off+=L;return s}).join("")}</svg>`}
+function deltaBox(label,cur,prev){return `<div><small>${label}</small><b class="num ${prev&&cur>prev?"up":prev?"down":""}">${prev?(cur>=prev?"+":"")+((cur-prev)/prev*100).toFixed(1)+"%":"—"}</b></div>`}
+function bars(vals,labels,hi){const mx=Math.max(0,...vals);return `<div class="chart"><div class="bars">${vals.map((v,i)=>`<div class="${v?(i===hi?"hi":""):"z"}" data-v="${v}" style="height:${mx?(v/mx*100).toFixed(1):0}%"></div>`).join("")}</div></div><div class="axis">${labels.map(l=>`<span>${l}</span>`).join("")}</div>`}
+function report(){const isM=rmode==="m",sel=isM?E.filter(r=>r.ym===rym):E.filter(r=>r.y===ryr),ex=exOf(sel),inc=incOf(sel),exr=base(sel.filter(r=>r.type==="expense"));
+
+ let h=navbar("报表","",`<div style="padding:0 16px"><div class="seg-hit"><div class="seg"><button data-m="m" class="${isM?"on":""}">月</button><button data-m="y" class="${isM?"":"on"}">年</button></div></div></div>`)+
+ `<div class="wrap">${period()}`;
+ if(!sel.length)return h+`</div>`+empty('<span class="ti-chart" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',isM?"本月暂无数据":"本年暂无数据","有记录后会在这里显示分类占比和趋势。")+`<div class="wrap">${trendCard()}</div>`;
+ const prevA=isM?E.filter(r=>r.ym===shiftYM(rym,-1)):E.filter(r=>r.y===String(+ryr-1));const yoyA=isM?E.filter(r=>r.ym===(+rym.slice(0,4)-1)+rym.slice(4)):null;
+ const g=groupBy(exr,"category"),parts=Object.entries(g).map(([k,a])=>({k,v:sum(a),c:colorOf(k)})).sort((a,b)=>b.v-a.v);
+ let vals,labels,hi;if(isM){const n=new Date(+rym.slice(0,4),+rym.slice(5),0).getDate();vals=[...Array(n)].map((_,i)=>sum(exr.filter(r=>+r.d.slice(8)===i+1)));labels=[1,8,15,22,n]}
+ else{vals=[...Array(12)].map((_,i)=>sum(exr.filter(r=>+r.ym.slice(5)===i+1)));labels=[...Array(12)].map((_,i)=>i+1)}
+ hi=vals.indexOf(Math.max(...vals));const rank=(t,k,id)=>{const a=Object.entries(groupBy(exr,k)).map(([n,x])=>[n,sum(x)]).sort((x,y)=>y[1]-x[1]).slice(0,10),mx=a[0]?a[0][1]:1;
+ return a.length?`<div class="card" id="${id}"><h2>${t}<small>${BASE} 支出</small></h2>${a.map(([n,v])=>`<div class="rk" data-k="${esc(n)}" data-v="${v}" style="padding:8px 0"><div style="display:flex;justify-content:space-between;font-size:15px;margin-bottom:6px"><span>${esc(n||"—")}</span><span class="sub num">${fmt(v)}</span></div><div class="track"><i style="width:${(v/mx*100).toFixed(1)}%"></i></div></div>`).join("")}</div>`:""};
+ return h+`<div class="summary"><div class="lbl">${isM?mlabel(rym):ryr+"年"}支出</div><div class="big num" id="r-ex">${fmt(ex)}</div>
+ <div class="three" style="margin-bottom:12px;border-top:0;padding-top:0"><div><small>收入</small><b class="num" id="r-inc" style="color:var(--green)">${fmt(inc)}</b></div><div><small>结余</small><b class="num" id="r-bal">${fmt(inc-ex)}</b></div><div><small>笔数</small><b class="num">${sel.length}</b></div></div>
+ <div class="delta">${isM?deltaBox("环比 上月",ex,exOf(prevA))+deltaBox(`同比 去年${mlabel(rym)}`,ex,exOf(yoyA)):deltaBox(`同比 ${+ryr-1}年`,ex,exOf(prevA))+`<div><small>月均</small><b class="num">${fmt(Math.round(ex/(ryr===nowYM().slice(0,4)?+nowYM().slice(5):12)))}</b></div>`}</div></div>${curNote(sel)}
+ ${parts.length?`<div class="card"><h2>分类占比<small>点分类查看明细</small></h2><div class="ring">${donut(parts,ex)}<div style="flex:1;font-size:15px">${parts.map(p=>`<a class="row" href="#/list" data-drill="${esc(p.k)}" data-v="${p.v}" style="padding:0;gap:10px"><span class="badge" style="background:${p.c}">${esc(p.k.slice(0,1))}</span><span class="m">${esc(p.k)}</span><span class="sub num">${(p.v/ex*100).toFixed(1)}%</span><span class="chev"></span></a>`).join("")}</div></div></div>`:""}
+ <div class="card"><h2>${isM?"每日支出":"每月支出"}<small>最高 ${fmt(Math.max(0,...vals))}</small></h2>${bars(vals,labels,hi)}</div>
+ ${trendCard()}
+ ${rank("账户分布","account","acct")}${rank("商户排行","payee","payee")}</div>`}
+// ---- 分类趋势图: stacked bars per month (expense, JPY only, JST months, 0-months kept)
+const TR={range:"6",off:new Set(),sel:null};
+const sumA=a=>a.reduce((s,v)=>s+v,0),pctTxt=(c,p)=>p?((c>=p?"+":"")+((c-p)/p*100).toFixed(1)+"%"):"—";
+function trendMonths(range){const end=rmode==="m"?rym:(ryr===nowYM().slice(0,4)?nowYM():ryr+"-12");
+ if(range==="ytd"){const y=end.slice(0,4);return [...Array(+end.slice(5))].map((_,i)=>y+"-"+pad(i+1))}
+ const n=+range;return [...Array(n)].map((_,i)=>shiftYM(end,i-n+1))}
+function trendData(range=TR.range){const ms=trendMonths(range),idx={};ms.forEach((m,i)=>idx[m]=i);idx[shiftYM(ms[0],-1)]=-1;
+ const by={},prev={},other={};
+ for(const r of E){if(r.type!=="expense"||r.deleted)continue;const i=idx[r.ym];if(i===undefined)continue;
+  if(r.currency!=="JPY"){if(i>=0)other[r.currency]=(other[r.currency]||0)+r.amount;continue}
+  const c=r.category||"未分类";if(i<0){prev[c]=(prev[c]||0)+r.amount;continue}(by[c]=by[c]||ms.map(()=>0))[i]+=r.amount}
+ const cats=Object.keys(by).sort((a,b)=>sumA(by[b])-sumA(by[a])||a.localeCompare(b));
+ const val=(c,i)=>i<0?(prev[c]||0):(by[c]?by[c][i]:0);return {ms,cats,by,prev,other,val}}
+window.__trend=trendData;
+const niceMax=v=>{if(v<=0)return 1;const p=10**Math.floor(Math.log10(v)),f=v/p;return (f<=1?1:f<=2?2:f<=5?5:10)*p};
+const yen=v=>v>=10000?(v/10000).toFixed(v%10000?1:0)+"万":String(v);
+function trendSVG(T,vis,si){const n=T.ms.length,W=330,H=170,top=8,bot=22,ch=H-top-bot,slot=(W-30)/n,bw=Math.min(26,slot*.6);
+ const tot=T.ms.map((_,i)=>sumA(vis.map(c=>T.val(c,i)))),mx=niceMax(Math.max(0,...tot));
+ let s=`<svg id="tr-svg" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="分类趋势图"><defs>`;
+ T.ms.forEach((m,i)=>{const x=i*slot+(slot-bw)/2,h=tot[i]/mx*ch;s+=`<clipPath id="tc${i}"><rect x="${x.toFixed(1)}" y="${(top+ch-h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(5,bw/4).toFixed(1)}"/></clipPath>`});
+ s+=`</defs>`;[0,.5,1].forEach(f=>{const y=(top+ch-f*ch).toFixed(1);s+=`<line x1="0" x2="${W-30}" y1="${y}" y2="${y}" style="stroke:var(--sep);stroke-width:${f?.5:1}"${f?' stroke-dasharray="2 3"':""}/>`+(f?`<text x="${W}" y="${(+y+3).toFixed(1)}" text-anchor="end" class="tr-ax">${yen(mx*f)}</text>`:"")});
+ T.ms.forEach((m,i)=>{const x=i*slot+(slot-bw)/2,dim=si!=null&&si!==i;let y=top+ch;
+  s+=`<g class="tr-bar" data-m="${m}" data-v="${tot[i]}" opacity="${dim?.35:1}">`;
+  if(!tot[i])s+=`<rect class="z" x="${x.toFixed(1)}" y="${(top+ch-3).toFixed(1)}" width="${bw.toFixed(1)}" height="3" rx="1.5" style="fill:var(--fill)"/>`;
+  else{s+=`<g clip-path="url(#tc${i})">`;vis.forEach(c=>{const v=T.val(c,i);if(!v)return;const h=v/mx*ch;y-=h;s+=`<rect data-c="${esc(c)}" data-v="${v}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${(h+.4).toFixed(1)}" style="fill:${colorOf(c)}"/>`});s+=`</g>`}
+  s+=`<text x="${(i*slot+slot/2).toFixed(1)}" y="${H-6}" text-anchor="middle" class="tr-ax${si===i?" on":""}">${n>6&&i%2&&i!==n-1&&si!==i?"":+m.slice(5)+"月"}</text>`;
+  s+=`<rect data-tm="${i}" x="${(i*slot).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${H}" fill="transparent"/></g>`});
+ return s+`</svg>`}
+function trendCard(){const T=trendData(),vis=T.cats.filter(c=>!TR.off.has(c)),n=T.ms.length;
+ if(TR.sel!=null&&TR.sel>=n)TR.sel=null;const si=TR.sel,mi=si==null?n-1:si,m=T.ms[mi];
+ const segs=[["6","6个月"],["ytd","今年"],["12","12个月"]].map(([k,l])=>`<button data-tr="${k}" class="${TR.range===k?"on":""}">${l}</button>`).join("");
+ const chips=T.cats.map(c=>`<button class="tchip${TR.off.has(c)?"":" on"}" data-tc="${esc(c)}" aria-pressed="${!TR.off.has(c)}"><i style="background:${colorOf(c)}"></i>${esc(c)}</button>`).join("");
+ const rows=vis.map(c=>({c,v:T.val(c,mi),p:T.val(c,mi-1)}));const tv=sumA(rows.map(r=>r.v)),tp=sumA(rows.map(r=>r.p));
+ const det=`<div class="tr-det" id="tr-det" data-m="${m}"><div class="tr-dh"><b>${+m.slice(0,4)}年${mlabel(m)}${si==null?"":" · 已选"}</b><span class="num" id="tr-tot">${fmt(tv)} <small class="${tp&&tv>tp?"up":tp&&tv<tp?"down":""}">${pctTxt(tv,tp)}</small></span></div>`+
+  rows.filter(r=>r.v||r.p).sort((a,b)=>b.v-a.v).map(r=>`<div class="tr-r" data-c="${esc(r.c)}" data-v="${r.v}"><i style="background:${colorOf(r.c)}"></i><span>${esc(r.c)}</span><span class="num">${fmt(r.v)}</span><small class="num ${r.p&&r.v>r.p?"up":r.p&&r.v<r.p?"down":""}">${pctTxt(r.v,r.p)}</small></div>`).join("")+`</div>`;
+ const mv=rows.map(r=>({...r,d:r.v-r.p})),up=mv.filter(r=>r.d>0).sort((a,b)=>b.d-a.d)[0],dn=mv.filter(r=>r.d<0).sort((a,b)=>a.d-b.d)[0];
+ const mover=(t,r,id)=>`<div class="tr-mv" id="${id}"><small>${t}</small>${r?`<b><i style="background:${colorOf(r.c)}"></i>${esc(r.c)}</b><span class="num">${r.d>0?"+":"-"}${fmt(Math.abs(r.d))} · ${pctTxt(r.v,r.p)}</span>`:`<b>—</b><span class="num">—</span>`}</div>`;
+ const ok=Object.keys(T.other);
+ return `<div class="card" id="trend"><h2>分类趋势图<small>${mlabel(T.ms[0])}–${mlabel(T.ms[n-1])} · JPY 支出</small></h2>
+ <div class="seg tr-seg">${segs}</div>${trendSVG(T,vis,si)}
+ <div class="tr-chips">${chips||'<span class="sub" style="font-size:13px">这段时间没有 JPY 支出</span>'}</div>${det}
+ <div class="tr-mvs">${mover("涨得最多",up,"tr-up")}${mover("降得最多",dn,"tr-dn")}</div>
+ ${ok.length?`<div class="cur" id="tr-other">其他币种支出（不换算，未计入图表）：${ok.map(c=>fmt(T.other[c],c)).join(" · ")}</div>`:""}</div>`}
+const trendRedraw=()=>{const el=$("#trend");if(el)el.outerHTML=trendCard()};
+document.addEventListener("click",e=>{const b=e.target.closest("#trend [data-tr],#trend [data-tc],#trend [data-tm]");if(!b)return;const d=b.dataset;
+ if(d.tr){TR.range=d.tr;TR.sel=null}else if(d.tc!=null){TR.off.has(d.tc)?TR.off.delete(d.tc):TR.off.add(d.tc)}else{const i=+d.tm;TR.sel=TR.sel===i?null:i}trendRedraw()});
+// ---- entry detail sheet
+const SRC={screenshot:"截图",text:"文字",voice:"录音",audio:"录音",manual:"手动"};
+function entrySheet(r){const s=r.type==="income"?"+":r.type==="transfer"?"":"-";const f=(k,v,id)=>`<div class="row"><span class="m">${k}</span><span class="v" data-f="${id}" style="white-space:normal;text-align:right;max-width:65%">${v}</span></div>`;
+ return `<div class="dim" data-eclose="1"></div><div class="sheet" id="entry" role="dialog" aria-label="账目详情"><div class="grab"></div><div class="navbar"><span></span><span class="t">账目详情</span><button class="nb b" data-eclose="1">完成</button></div><div class="body" style="padding:0 16px 24px">
+ <div style="text-align:center;padding:16px 0 4px"><div class="big num ${r.type==="income"?"in":""}" style="font-size:40px;font-weight:700" data-f="amount">${s}${fmt(r.amount,r.currency)}</div><div class="sub" style="font-size:15px;margin-top:4px">${esc(r.payee||"—")}${isPend(r)?'<span class="tag">待确认</span>':""}</div></div>
+ <div class="group" style="margin-top:16px">${f("时间",esc(r.d+" "+r.hm),"time")}${f("类型",TYPE[r.type],"type")}${f("分类",esc(r.category||"—"),"category")}${f("账户",esc(r.account||"—"),"account")}${f("商户",esc(r.payee||"—"),"payee")}${f("备注",esc(r.note||"—"),"note")}${f("来源",esc(SRC[r.source]||r.source||"—"),"source")}${f("状态",isPend(r)?'<span class="tag" style="margin:0">待确认</span>':"已确认","pending")}</div>
+ ${isPend(r)?'<div class="readonly">这笔还没确认。需要改的话，告诉记账管家。</div>':""}</div></div>`}
+const openEntry=id=>{const r=E.find(x=>x.id===id);if(r){$("#overlay").innerHTML=entrySheet(r);document.body.style.overflow="hidden"}};
+const closeEntry=()=>{$("#overlay").innerHTML="";document.body.style.overflow=""};
+// ---- 订阅 (read-only, data/subscriptions.json maintained by 记账管家)
+let SUBS;   // undefined = not loaded yet, null = missing/unreadable
+const subsToday=()=>window.__subsToday||today();
+const dim=(y,m)=>new Date(Date.UTC(y,m,0)).getUTCDate();
+function nextCharge(it,t=subsToday()){const [y,m,d]=t.split("-").map(Number),day=Math.max(1,+it.day||1),mk=(Y,M)=>`${Y}-${pad(M)}-${pad(Math.min(day,dim(Y,M)))}`;
+ if(it.cycle==="yearly"){const M=+it.month||1;let c=mk(y,M);return c<t?mk(y+1,M):c}
+ let c=mk(y,m);if(c<t){const n=m===12?[y+1,1]:[y,m+1];c=mk(...n)}return c}
+const daysTo=(a,t=subsToday())=>Math.round((Date.parse(a+"T00:00:00Z")-Date.parse(t+"T00:00:00Z"))/864e5);
+function dueLabel(dt,t=subsToday()){const n=daysTo(dt,t);return n===0?"今天":n===1?"明天":n<=7?`${n} 天后`:(dt.slice(0,4)!==t.slice(0,4)?`${dt.slice(0,4)}年`:"")+`${+dt.slice(5,7)}月${+dt.slice(8)}日`}
+window.__subs={nextCharge,dueLabel,daysTo};
+const subItems=()=>((SUBS&&Array.isArray(SUBS.items))?SUBS.items:[]).filter(it=>it&&(it.cycle==="monthly"||it.cycle==="yearly")&&+it.amount>0)
+ .map((it,i)=>({...it,i,amount:+it.amount,next:nextCharge(it)})).sort((a,b)=>a.next.localeCompare(b.next)||b.amount-a.amount);
+function subTotals(a=subItems()){const mo=sum(a.filter(x=>x.cycle==="monthly")),yr=sum(a.filter(x=>x.cycle==="yearly"));return {mo,yr,eff:Math.round(mo+yr/12),annual:mo*12+yr}}
+const subsDue=()=>subItems().filter(x=>daysTo(x.next)<=7).length;
+async function loadSubs(){try{const r=await fetch((TESTPLAIN?"data/subscriptions.json":ENC.subs)+"?t="+Date.now(),{cache:"no-store"});SUBS=r.ok?(TESTPLAIN?await r.json():await decryptWith(KEY,await r.json())):null}catch{SUBS=null}
+ if(["home","subs"].includes(route())){const y=scrollY;render();scrollTo(0,y)}else subBadge()}
+function subBadge(){const n=SUBS?subsDue():0,c=$("#pcnt");if(c){c.hidden=!n;c.textContent=n||""}}
+const subIcon=it=>`<span class="badge sub-ic" style="background:${colorOf("订阅")}">${esc((it.payee||"·").slice(0,1).toUpperCase())}</span>`;
+function homeSubs(){if(SUBS===undefined)return "";const a=subItems();if(!a.length)return "";const t=subTotals(a),n=a[0],soon=daysTo(n.next)<=7;
+ return `<a class="subcard" id="home-subs" href="#/subs">${subIcon({payee:"订"})}<div class="m"><div class="p">订阅 · 每月固定 <b class="num" id="hs-mo">${fmt(t.mo)}</b></div><div class="n${soon?" soon":""}" id="hs-next">${dueLabel(n.next)} ${esc(n.payee)} ${fmt(n.amount)}</div></div><span class="chev"></span></a>`}
+function subs(){const h=navbar("订阅");if(SUBS===undefined)return h+`<div class="wrap"><div class="sk" style="height:120px;border-radius:12px;margin-top:8px"></div></div>`;
+ const a=subItems();if(!a.length)return h+empty(`<span style="font-size:30px;font-weight:600;color:var(--sub)">订</span>`,"还没有订阅数据","记账管家整理好订阅后，会显示在这里。");
+ const t=subTotals(a);
+ return h+`<div class="wrap"><div class="summary subs-sum"><div class="lbl">每月固定支出</div><div class="big num" id="s-mo">${fmt(t.mo)}</div>
+ <div class="sub" id="s-eff" style="font-size:15px">含年付折算 ${fmt(t.eff)}/月</div><div class="sub" id="s-yr" style="font-size:15px;margin-top:2px">全年合计 ${fmt(t.annual)}</div></div>
+ <div class="sh">按下次扣费排序</div><div class="group ic-rows" id="subs-list">${a.map(it=>{const n=daysTo(it.next),soon=n<=7;
+  return `<div class="row tall subrow${soon?" soon":""}" role="button" tabindex="0" data-sub="${it.i}" data-next="${it.next}">${subIcon(it)}<div class="m"><div class="p">${esc(it.payee||"—")}</div><div class="n">${esc(it.note||"")}${it.note?" · ":""}<span class="due">${dueLabel(it.next)}</span></div></div>
+  <div class="v"><div class="num">${fmt(it.amount)}</div><span class="ctag">${it.cycle==="yearly"?"年付":"月付"}</span></div><span class="chev"></span></div>`}).join("")}</div>
+ <div class="readonly">订阅由记账管家维护，这里只读。</div></div>`}
+function openSub(i){const it=(SUBS.items||[])[i];if(!it)return;const rows=sorted(E.filter(r=>r.category==="订阅"&&r.payee===it.payee));
+ $("#overlay").innerHTML=`<div class="dim" data-eclose="1"></div><div class="sheet" id="subsheet" role="dialog" aria-label="${esc(it.payee)} 扣费记录"><div class="grab"></div><div class="navbar"><span></span><span class="t">${esc(it.payee)}</span><button class="nb b" data-eclose="1">完成</button></div><div class="body" style="padding:0 16px 24px">
+ <div class="sub" style="text-align:center;font-size:15px;padding:8px 0 4px">${it.cycle==="yearly"?"年付":"月付"} ${fmt(+it.amount)} · 下次 ${dueLabel(nextCharge(it))}</div>
+ <div class="sh" style="padding-left:0">扣费记录（${rows.length}）</div>${rows.length?`<div class="group" id="sub-charges">${rows.map(r=>`<div class="row" data-cid="${esc(r.id)}"><span class="m">${esc(r.d)}</span><span class="sub" style="flex:1">${esc(r.note||"")}</span><span class="num">${fmt(r.amount,r.currency)}</span></div>`).join("")}</div>`:`<div class="readonly" id="sub-none">账本里还没有这项订阅的扣费记录。</div>`}</div></div>`;document.body.style.overflow="hidden"}
+document.addEventListener("click",e=>{const r=e.target.closest("[data-sub]");if(r)openSub(+r.dataset.sub)});
+// ---- router
+const ROUTES={home,list,subs,budget,report};const route=()=>location.hash.replace(/^#\/?/,"").split("?")[0]||"home";
+function render(){if(route()==="pending"){history.replaceState(null,"","#/subs")}const k=route(),fn=ROUTES[k]||home;if(k!=="list")$("#sheet").innerHTML="";
+ $("#app").innerHTML=fn();const tk=k==="budget"?"home":k;document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.r===tk));
+ subBadge();if(k==="list")listRes()}
+const go=()=>{render();window.scrollTo(0,0)};
+document.addEventListener("input",e=>{if(e.target.id==="q"){st.q=e.target.value;listRes()}});
+document.addEventListener("change",e=>{const f=e.target.dataset.f;if(f&&e.target.tagName==="SELECT"){st[f]=e.target.value;listRes()}});
+function shiftPeriod(d){if(rmode==="m"||route()!=="report"){const n=shiftYM(rym,d);if(d>0&&n>mxYM())return false;rym=n}else{const n=String(+ryr+d);if(d>0&&n>mxYM().slice(0,4))return false;ryr=n}render();return true}
+document.addEventListener("click",e=>{const mb=e.target.closest("[data-more]");if(mb){const k=mb.dataset.more,y=scrollY;lim[k]+=PAGE;listRes(true);scrollTo(0,y);return}
+ const b=e.target.closest("[data-m],[data-p],[data-now],[data-open],[data-close],[data-clr],[data-pend],[data-reset],[data-type],[data-cat],[data-drill],[data-refresh],[data-retry],[data-qclr],[data-eclose],[data-id],#newbar");if(!b)return;const d=b.dataset;
+ if(b.id==="newbar")return applyPending();
+ if(d.refresh!=null)return refresh();if(d.retry!=null)return boot();if(d.eclose!=null)return closeEntry();if(d.id!=null)return openEntry(d.id);
+ if(d.m){rmode=d.m;render()}else if(d.p){shiftPeriod(+d.p)}else if(d.now){rym=nowYM();ryr=rym.slice(0,4);render()}
+ else if(d.drill!=null){Object.assign(st,{q:"",type:"expense",category:d.drill,account:"",currency:"",pend:false,month:rmode==="m"?rym:""})}
+ else if(d.qclr!=null){e.preventDefault();st.q="";const q=$("#q");q.value="";listRes();q.focus()}
+ else{if(d.open)sheet=true;if(d.close)sheet=false;if(d.clr)st[d.clr]="";if(d.pend)st.pend=!st.pend;if(d.type!=null)st.type=d.type;if(d.cat!=null)st.category=st.category===d.cat?"":d.cat;
+  if(d.reset){Object.assign(st,{q:"",month:"",type:"",category:"",account:"",currency:"",pend:false});const q=$("#q");if(q)q.value=""}listRes()}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeEntry();if(e.key==="Enter"&&e.target.dataset&&e.target.dataset.id)openEntry(e.target.dataset.id)});
+window.addEventListener("hashchange",go);
+// ---- encrypted data (AES-256-GCM, PBKDF2-SHA256). Only *.enc.json is published; the derived key is kept in memory,
+// or (「在这台设备上记住」) in IndexedDB as a NON-extractable CryptoKey. The password itself is never stored.
+// Decrypted JSON is never written to the SW cache / localStorage (the SW only ever sees the ciphertext files).
+const TESTPLAIN=!!window.__LEDGER_TEST_PLAINTEXT;   // set only by the local test harness (fixture servers); never in the deployed page
+const ENC={ledger:"data/ledger.enc.json",subs:"data/subscriptions.enc.json"};
+let KEY=null;const b64d=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const idb=(mode,fn)=>new Promise((res,rej)=>{const o=indexedDB.open("ledger-keys",1);o.onupgradeneeded=()=>o.result.createObjectStore("k");o.onerror=()=>rej(o.error);
+ o.onsuccess=()=>{const t=o.result.transaction("k",mode),s=t.objectStore("k"),r=fn(s);t.oncomplete=()=>{o.result.close();res(r&&r.result)};t.onerror=()=>rej(t.error)}});
+const keyLoad=()=>idb("readonly",s=>s.get("main")).catch(()=>null),keySave=k=>idb("readwrite",s=>s.put(k,"main")).catch(()=>{}),keyClear=()=>idb("readwrite",s=>s.delete("main")).catch(()=>{});
+async function deriveKey(pw,enc){const m=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveKey"]);
+ const key=await crypto.subtle.deriveKey({name:"PBKDF2",hash:"SHA-256",salt:b64d(enc.salt),iterations:+enc.iter},m,{name:"AES-GCM",length:256},false,["decrypt"]);return {key,salt:enc.salt,iter:+enc.iter}}
+async function decryptWith(K,enc){if(!enc||enc.v!==1||enc.kdf!=="PBKDF2-SHA256")throw new Error("bad format");if(K.salt!==enc.salt||K.iter!==+enc.iter)throw new Error("key mismatch");
+ const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64d(enc.iv)},K.key,b64d(enc.ct));return JSON.parse(new TextDecoder().decode(pt))}
+class Locked extends Error{}
+async function currentKey(){if(KEY)return KEY;const k=await keyLoad();if(k&&k.key)KEY=k;return KEY}
+async function openEnc(enc){const K=await currentKey();if(!K)throw new Locked("locked");
+ try{return await decryptWith(K,enc)}catch(e){KEY=null;await keyClear();throw new Locked("key no longer works")}}   // e.g. password changed
+async function lock(){KEY=null;await keyClear();E=[];SUBS=undefined;showUnlock()}
+function unlockHTML(){return `<div class="unlock" id="unlock"><div class="ul-in"><div class="ul-ic" aria-hidden="true"><span></span></div><h1>账本已加密</h1><p>输入密码以查看账目</p>
+ <form id="ul-form" autocomplete="off"><input id="ul-pw" type="password" autocomplete="current-password" placeholder="密码" aria-label="密码" enterkeyhint="go">
+ <label class="ul-rem"><input type="checkbox" id="ul-rem"><span>在这台设备上记住</span></label><button class="btn" id="ul-go" type="submit">解锁</button><div class="ul-err" id="ul-err" role="alert"></div></form>
+ <div class="ul-note">密码只用于在本机解密，不会上传或保存。</div></div></div>`}
+function showUnlock(msg=""){$("#overlay").innerHTML="";$("#sheet").innerHTML="";document.body.classList.add("locked");$("#app").innerHTML=unlockHTML();if(msg)$("#ul-err").textContent=msg;setTimeout(()=>{const i=$("#ul-pw");i&&i.focus()},50)}
+document.addEventListener("submit",async e=>{if(e.target.id!=="ul-form")return;e.preventDefault();const pw=$("#ul-pw").value,btn=$("#ul-go"),box=$(".ul-in");if(!pw)return;
+ btn.disabled=true;btn.textContent="正在解锁…";$("#ul-err").textContent="";
+ try{const r=await fetch(ENC.ledger+"?t="+Date.now(),{cache:"no-store"});if(!r.ok)throw Object.assign(new Error("HTTP "+r.status),{net:true});const enc=await r.json();
+  const K=await deriveKey(pw,enc);await decryptWith(K,enc);KEY=K;if($("#ul-rem").checked)await keySave(K);else await keyClear();document.body.classList.remove("locked");boot()}
+ catch(err){btn.disabled=false;btn.textContent="解锁";const i=$("#ul-pw");
+  if(err&&err.net){$("#ul-err").textContent="连不上网络，稍后再试";return}
+  i.value="";$("#ul-err").textContent="密码不正确";box.classList.remove("shake");void box.offsetWidth;box.classList.add("shake");try{navigator.vibrate&&navigator.vibrate([20,40,20])}catch{}i.focus()}});
+document.addEventListener("click",e=>{if(e.target.closest("[data-lock]"))lock()});
+// ---- data loading / refresh
+const SRCURL=TESTPLAIN?(({sample:"data/sample-ledger.json",trend:"data/sample-trend.json"})[new URLSearchParams(location.search).get("data")]||"data/ledger.json"):ENC.ledger;
+let sig="",lastCheck=0,busy=false,pendingL=null;
+const RM=matchMedia("(prefers-reduced-motion: reduce)");
+function sigOf(L){const a=(L.entries||[]);let h=a.length;for(const r of a)h=(h*31+String(r.id).length+(+r.amount||0)+String(r.updated_at||"").length+(r.deleted?7:0))%1e9;return h+"|"+(L.generated_at||"")+"|"+JSON.stringify(L.budgets||null)}
+async function fetchLedger(){const r=await fetch(SRCURL+"?t="+Date.now(),{cache:"no-store"});if(!r.ok){const e=new Error("HTTP "+r.status);e.server=r.status>=500;throw e}const L=TESTPLAIN?await r.json():await openEnc(await r.json());const fc=r.headers.get("X-From-Cache");return {L,cached:!!fc,server:fc==="5xx"}}
+function apply(L){BASE=L.base_currency||"JPY";const unk=(L.entries||[]).filter(r=>!r.deleted&&!TYPE[r.type]);if(unk.length)console.warn(`ledger: skipped ${unk.length} entr${unk.length>1?"ies":"y"} with unknown type`,unk.map(r=>r.id+":"+r.type));E=(L.entries||[]).filter(r=>!r.deleted&&TYPE[r.type]).map(norm);BUD=L.budgets||null;sig=sigOf(L);
+ colorMap={};uniq("category").filter(c=>!CATC[c]).forEach((c,i)=>colorMap[c]=PAL[i%PAL.length]);window.__ledger={E,BUD,BASE}}
+let toastT;function toast(t){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove("show"),2600)}
+const NUMS=["t-ex","t-inc","t-bal","r-ex","r-inc","r-bal"];
+function animateNums(before){if(RM.matches)return;const els=NUMS.map(id=>document.getElementById(id)).filter(el=>el&&before[el.id]!=null);
+ const to=els.map(el=>parseFloat(el.textContent.replace(/[^\d.\-]/g,""))||0),from=els.map(el=>before[el.id]);if(!els.length||to.every((v,i)=>v===from[i]))return;
+ const t0=performance.now();document.body.dataset.anim="1";const step=t=>{const k=Math.min(1,(t-t0)/400),e=1-Math.pow(1-k,3);els.forEach((el,i)=>el.textContent=fmt(Math.round(from[i]+(to[i]-from[i])*e)));if(k<1)requestAnimationFrame(step);else delete document.body.dataset.anim};requestAnimationFrame(step)}
+function rerender(){const before={};NUMS.forEach(id=>{const el=document.getElementById(id);if(el)before[id]=parseFloat(el.textContent.replace(/[^\d.\-]/g,""))||0});const y=scrollY;render();scrollTo(0,y);animateNums(before)}
+function setBusy(v){busy=v;document.querySelectorAll(".rbtn").forEach(b=>b.classList.toggle("spin",v));$("#ptr").classList.toggle("spin",v)}
+
+async function refresh(){if(busy)return;setBusy(true);const old=new Set(E.map(r=>r.id));
+ try{const {L,cached,server}=await fetchLedger();lastCheck=Date.now();apply(L);pendingL=null;$("#newbar").hidden=true;
+  if(cached){rerender();toast(server?"服务器暂时不可用，显示缓存数据":"离线，显示缓存数据")}else{lastUpd=Date.now();rerender();toast(`已更新 · +${E.filter(r=>!old.has(r.id)).length} 条`)}}
+ catch(e){if(e instanceof Locked){setBusy(false);ptrReset();return showUnlock("密码已更改或已失效，请重新输入")}toast(e&&e.server?"服务器暂时不可用，显示缓存数据":"离线，显示缓存数据")}finally{setBusy(false);ptrReset();if(KEY||TESTPLAIN)loadSubs()}}
+function applyPending(){if(!pendingL)return;const old=new Set(E.map(r=>r.id));apply(pendingL);pendingL=null;lastUpd=Date.now();$("#newbar").hidden=true;rerender();toast(`已更新 · +${E.filter(r=>!old.has(r.id)).length} 条`)}
+async function silentCheck(){lastCheck=Date.now();try{const {L,cached}=await fetchLedger();if(!cached&&sigOf(L)!==sig){pendingL=L;$("#newbar").hidden=false}}catch(e){if(e instanceof Locked)showUnlock("密码已更改或已失效，请重新输入")}}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&E&&sig&&Date.now()-lastCheck>5*60e3)silentCheck()});
+window.__test={expire:()=>{lastCheck=0}};
+// ---- touch: native-feel pull-to-refresh + horizontal month swipe (direction-locked)
+const PTR={TH:70,HOLD:56,MAX:130};let tx=null,ptrH=0;
+const damp=dy=>dy<=0?0:PTR.MAX*(1-Math.exp(-dy/(PTR.MAX*1.6)));   // rubber-band
+const STANDALONE=matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;if(STANDALONE)document.documentElement.classList.add("standalone");
+function ptrSet(h,anim){ptrH=h;const p=$("#ptr"),a=$("#app"),k=Math.min(1,h/PTR.TH);
+ p.classList.toggle("anim",!!anim);a.classList.toggle("anim",!!anim);
+ a.style.transform=h&&!RM.matches?`translateY(${h.toFixed(1)}px)`:"";
+ p.style.opacity=h>0||busy?1:0;p.style.transform=`translate(-50%,${(RM.matches?PTR.HOLD:h)-44}px)`;
+ p.querySelector(".ring").style.strokeDashoffset=(1-k)*69.1;p.dataset.k=k.toFixed(2)}
+function ptrReset(){const p=$("#ptr");p.classList.remove("ready","pull","spin");ptrSet(0,true)}
+// Normal scrolling never sees a non-passive listener: the blocking touchmove handler is attached only for a
+// gesture that starts with the page at the very top (scrollY<=0), and removed again on touchend/cancel.
+const atTop=()=>(document.scrollingElement||document.documentElement).scrollTop<=0&&scrollY<=0;
+function ptrGuard(e){if(tx&&tx.axis==="ptr"&&e.cancelable)e.preventDefault()}
+const ptrArm=on=>on?document.addEventListener("touchmove",ptrGuard,{passive:false}):document.removeEventListener("touchmove",ptrGuard,{passive:false});
+document.addEventListener("touchstart",e=>{ptrArm(false);if(e.touches.length!==1||$("#overlay").innerHTML||$("#sheet").innerHTML||e.target.closest(".sheet,.chips,.dim"))return tx=null;const t=e.touches[0];tx={x:t.clientX,y:t.clientY,top:atTop(),axis:null,buzz:false};if(tx.top)ptrArm(true)},{passive:true});
+document.addEventListener("touchmove",e=>{if(!tx)return;const t=e.touches[0],dx=t.clientX-tx.x,dy=t.clientY-tx.y;
+ if(!tx.axis&&Math.abs(dx)+Math.abs(dy)>10)tx.axis=Math.abs(dx)>Math.abs(dy)*1.2?"x":(dy>0&&tx.top&&atTop()&&!busy?"ptr":"y");
+ if(tx.axis==="ptr"){const h=damp(dy),p=$("#ptr");p.classList.add("pull");ptrSet(h,false);
+  const ready=h>=PTR.TH;if(ready&&!tx.buzz){tx.buzz=true;try{navigator.vibrate&&navigator.vibrate(10)}catch{}}p.classList.toggle("ready",ready)}},{passive:true});
+document.addEventListener("touchend",e=>{ptrArm(false);if(!tx)return;const t=e.changedTouches[0],dx=t.clientX-tx.x,a=tx.axis;tx=null;
+ if(a==="ptr"){$("#ptr").classList.remove("pull");if(ptrH>=PTR.TH&&!busy){ptrSet(PTR.HOLD,true);refresh()}else ptrReset();return}
+ if(a==="x"&&Math.abs(dx)>60&&["home","report","budget"].includes(route()))shiftPeriod(dx<0?1:-1)},{passive:true});
+document.addEventListener("touchcancel",()=>{ptrArm(false);if(tx&&tx.axis==="ptr"&&!busy)ptrReset();tx=null},{passive:true});
+// ---- boot
+const SKEL=`<div class="top"><div class="lt"><h1>账本</h1></div></div><div class="wrap" id="skeleton" aria-busy="true" aria-label="加载中"><div class="sk" style="width:45%;height:34px;margin:8px 0 16px"></div><div class="sk" style="height:150px;border-radius:12px"></div><div class="sk" style="height:52px;margin-top:12px;border-radius:12px"></div><div class="sk" style="width:30%;height:13px;margin:24px 0 8px"></div>${'<div class="sk" style="height:60px;margin-top:2px;border-radius:12px"></div>'.repeat(5)}</div>`;
+async function boot(){if(!TESTPLAIN&&!(await currentKey()))return showUnlock();document.body.classList.remove("locked");$("#app").innerHTML=SKEL;
+ try{const {L,cached,server}=await fetchLedger();apply(L);lastCheck=Date.now();if(!cached)lastUpd=Date.now();render();loadSubs();if(cached)toast(server?"服务器暂时不可用，显示缓存数据":"离线，显示缓存数据")}
+ catch(e){if(e instanceof Locked)return showUnlock("密码已更改或已失效，请重新输入");$("#app").innerHTML=navbar("账本")+empty('<span style="font-size:30px;font-weight:600;color:var(--sub)">!</span>',...(e&&e.server?["服务器暂时不可用","服务器出错了，本机也还没有缓存数据。稍后再试一次。"]:["连不上网络","没能读取账目数据。检查网络后再试一次。"]),'<button class="btn sec" data-retry="1">重试</button>')}}
+boot();
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
+ let reloaded=false;const had=!!navigator.serviceWorker.controller;navigator.serviceWorker.addEventListener("controllerchange",()=>{if(reloaded||!had)return;reloaded=true;location.reload()})}
