@@ -117,7 +117,6 @@ function trendData(range=TR.range){const ms=trendMonths(range),idx={};ms.forEach
   const c=r.category||"未分类";if(i<0){prev[c]=(prev[c]||0)+r.amount;continue}(by[c]=by[c]||ms.map(()=>0))[i]+=r.amount}
  const cats=Object.keys(by).sort((a,b)=>sumA(by[b])-sumA(by[a])||a.localeCompare(b));
  const val=(c,i)=>i<0?(prev[c]||0):(by[c]?by[c][i]:0);return {ms,cats,by,prev,other,val}}
-window.__trend=trendData;
 const niceMax=v=>{if(v<=0)return 1;const p=10**Math.floor(Math.log10(v)),f=v/p;return (f<=1?1:f<=2?2:f<=5?5:10)*p};
 const yen=v=>v>=10000?(v/10000).toFixed(v%10000?1:0)+"万":String(v);
 function trendSVG(T,vis,si){const n=T.ms.length,W=330,H=170,top=8,bot=22,ch=H-top-bot,slot=(W-30)/n,bw=Math.min(26,slot*.6);
@@ -168,7 +167,6 @@ function nextCharge(it,t=subsToday()){const [y,m,d]=t.split("-").map(Number),day
  let c=mk(y,m);if(c<t){const n=m===12?[y+1,1]:[y,m+1];c=mk(...n)}return c}
 const daysTo=(a,t=subsToday())=>Math.round((Date.parse(a+"T00:00:00Z")-Date.parse(t+"T00:00:00Z"))/864e5);
 function dueLabel(dt,t=subsToday()){const n=daysTo(dt,t);return n===0?"今天":n===1?"明天":n<=7?`${n} 天后`:(dt.slice(0,4)!==t.slice(0,4)?`${dt.slice(0,4)}年`:"")+`${+dt.slice(5,7)}月${+dt.slice(8)}日`}
-window.__subs={nextCharge,dueLabel,daysTo};
 const subItems=()=>((SUBS&&Array.isArray(SUBS.items))?SUBS.items:[]).filter(it=>it&&(it.cycle==="monthly"||it.cycle==="yearly")&&+it.amount>0)
  .map((it,i)=>({...it,i,amount:+it.amount,next:nextCharge(it)})).sort((a,b)=>a.next.localeCompare(b.next)||b.amount-a.amount);
 function subTotals(a=subItems()){const mo=sum(a.filter(x=>x.cycle==="monthly")),yr=sum(a.filter(x=>x.cycle==="yearly"));return {mo,yr,eff:Math.round(mo+yr/12),annual:mo*12+yr}}
@@ -230,7 +228,10 @@ class Locked extends Error{}
 async function currentKey(){if(KEY)return KEY;const k=await keyLoad();if(k&&k.key)KEY=k;return KEY}
 async function openEnc(enc){const K=await currentKey();if(!K)throw new Locked("locked");
  try{return await decryptWith(K,enc)}catch(e){KEY=null;await keyClear();throw new Locked("key no longer works")}}   // e.g. password changed
-async function lock(){KEY=null;await keyClear();E=[];SUBS=undefined;showUnlock()}
+function wipe(){E=[];BUD=null;SUBS=null;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;lim.list=PAGE;Object.assign(st,{q:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
+ ["#app","#overlay","#sheet"].forEach(q=>{const el=$(q);if(el)el.innerHTML=""});const t=$("#toast");if(t){t.textContent="";t.classList.remove("show")}
+ const nb=$("#newbar");if(nb)nb.hidden=true;const c=$("#pcnt");if(c){c.hidden=true;c.textContent=""}document.body.style.overflow=""}
+async function lock(){KEY=null;wipe();await keyClear();showUnlock()}
 function unlockHTML(){return `<div class="unlock" id="unlock"><div class="ul-in"><div class="ul-ic" aria-hidden="true"><span></span></div><h1>账本已加密</h1><p>输入密码以查看账目</p>
  <form id="ul-form" autocomplete="off"><input id="ul-pw" type="password" autocomplete="current-password" placeholder="密码" aria-label="密码" enterkeyhint="go">
  <label class="ul-rem"><input type="checkbox" id="ul-rem"><span>在这台设备上记住</span></label><button class="btn" id="ul-go" type="submit">解锁</button><div class="ul-err" id="ul-err" role="alert"></div></form>
@@ -238,10 +239,12 @@ function unlockHTML(){return `<div class="unlock" id="unlock"><div class="ul-in"
 function showUnlock(msg=""){$("#overlay").innerHTML="";$("#sheet").innerHTML="";document.body.classList.add("locked");$("#app").innerHTML=unlockHTML();if(msg)$("#ul-err").textContent=msg;setTimeout(()=>{const i=$("#ul-pw");i&&i.focus()},50)}
 document.addEventListener("submit",async e=>{if(e.target.id!=="ul-form")return;e.preventDefault();const pw=$("#ul-pw").value,btn=$("#ul-go"),box=$(".ul-in");if(!pw)return;
  btn.disabled=true;btn.textContent="正在解锁…";$("#ul-err").textContent="";
- try{const r=await fetch(ENC.ledger+"?t="+Date.now(),{cache:"no-store"});if(!r.ok)throw Object.assign(new Error("HTTP "+r.status),{net:true});const enc=await r.json();
+ let enc;try{const r=await fetch(ENC.ledger+"?t="+Date.now(),{cache:"no-store"});if(!r.ok)throw new Error("HTTP "+r.status);enc=await r.json()}
+ catch(err){btn.disabled=false;btn.textContent="解锁";$("#ul-err").textContent="连不上网络，暂时无法解锁";return}   // fetch/offline/HTTP/unreadable file: never "wrong password"
+ try{
   const K=await deriveKey(pw,enc);await decryptWith(K,enc);KEY=K;if($("#ul-rem").checked)await keySave(K);else await keyClear();document.body.classList.remove("locked");boot()}
  catch(err){btn.disabled=false;btn.textContent="解锁";const i=$("#ul-pw");
-  if(err&&err.net){$("#ul-err").textContent="连不上网络，稍后再试";return}
+  if(!(err&&err.name==="OperationError")){$("#ul-err").textContent="数据文件无法读取，请稍后再试";return}   // only an AES-GCM auth failure means a wrong password
   i.value="";$("#ul-err").textContent="密码不正确";box.classList.remove("shake");void box.offsetWidth;box.classList.add("shake");try{navigator.vibrate&&navigator.vibrate([20,40,20])}catch{}i.focus()}});
 document.addEventListener("click",e=>{if(e.target.closest("[data-lock]"))lock()});
 // ---- data loading / refresh
@@ -251,7 +254,7 @@ const RM=matchMedia("(prefers-reduced-motion: reduce)");
 function sigOf(L){const a=(L.entries||[]);let h=a.length;for(const r of a)h=(h*31+String(r.id).length+(+r.amount||0)+String(r.updated_at||"").length+(r.deleted?7:0))%1e9;return h+"|"+(L.generated_at||"")+"|"+JSON.stringify(L.budgets||null)}
 async function fetchLedger(){const r=await fetch(SRCURL+"?t="+Date.now(),{cache:"no-store"});if(!r.ok){const e=new Error("HTTP "+r.status);e.server=r.status>=500;throw e}const L=TESTPLAIN?await r.json():await openEnc(await r.json());const fc=r.headers.get("X-From-Cache");return {L,cached:!!fc,server:fc==="5xx"}}
 function apply(L){BASE=L.base_currency||"JPY";const unk=(L.entries||[]).filter(r=>!r.deleted&&!TYPE[r.type]);if(unk.length)console.warn(`ledger: skipped ${unk.length} entr${unk.length>1?"ies":"y"} with unknown type`,unk.map(r=>r.id+":"+r.type));E=(L.entries||[]).filter(r=>!r.deleted&&TYPE[r.type]).map(norm);BUD=L.budgets||null;sig=sigOf(L);
- colorMap={};uniq("category").filter(c=>!CATC[c]).forEach((c,i)=>colorMap[c]=PAL[i%PAL.length]);window.__ledger={E,BUD,BASE}}
+ colorMap={};uniq("category").filter(c=>!CATC[c]).forEach((c,i)=>colorMap[c]=PAL[i%PAL.length])}
 let toastT;function toast(t){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove("show"),2600)}
 const NUMS=["t-ex","t-inc","t-bal","r-ex","r-inc","r-bal"];
 function animateNums(before){if(RM.matches)return;const els=NUMS.map(id=>document.getElementById(id)).filter(el=>el&&before[el.id]!=null);
@@ -267,7 +270,6 @@ async function refresh(){if(busy)return;setBusy(true);const old=new Set(E.map(r=
 function applyPending(){if(!pendingL)return;const old=new Set(E.map(r=>r.id));apply(pendingL);pendingL=null;lastUpd=Date.now();$("#newbar").hidden=true;rerender();toast(`已更新 · +${E.filter(r=>!old.has(r.id)).length} 条`)}
 async function silentCheck(){lastCheck=Date.now();try{const {L,cached}=await fetchLedger();if(!cached&&sigOf(L)!==sig){pendingL=L;$("#newbar").hidden=false}}catch(e){if(e instanceof Locked)showUnlock("密码已更改或已失效，请重新输入")}}
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&E&&sig&&Date.now()-lastCheck>5*60e3)silentCheck()});
-window.__test={expire:()=>{lastCheck=0}};
 // ---- touch: native-feel pull-to-refresh + horizontal month swipe (direction-locked)
 const PTR={TH:70,HOLD:56,MAX:130};let tx=null,ptrH=0;
 const damp=dy=>dy<=0?0:PTR.MAX*(1-Math.exp(-dy/(PTR.MAX*1.6)));   // rubber-band
@@ -300,3 +302,7 @@ async function boot(){if(!TESTPLAIN&&!(await currentKey()))return showUnlock();d
 boot();
 if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
  let reloaded=false;const had=!!navigator.serviceWorker.controller;navigator.serviceWorker.addEventListener("controllerchange",()=>{if(reloaded||!had)return;reloaded=true;location.reload()})}
+
+// ---- test-only hooks: exposed ONLY when the local test harness sets a flag before load (never in the deployed page)
+if(window.__LEDGER_TEST_PLAINTEXT||window.__LEDGER_TEST_HOOKS){window.__trend=trendData;window.__subs={nextCharge,dueLabel,daysTo};window.__test={expire:()=>{lastCheck=0}};
+ window.__ledgerTest=()=>({E,BUD,BASE})}
