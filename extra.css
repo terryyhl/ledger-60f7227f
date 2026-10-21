@@ -183,3 +183,23 @@ html{background:var(--bg)}
 /* B4 QA P3: disabled ›/‹ (latest period) ≥3:1 in both modes; sheet spring overshoot never shows a gap at the bottom edge */
 :root{--dis:#86868B}@media(prefers-color-scheme:dark){:root{--dis:#6E6E73}}
 .sheet::after{content:"";position:absolute;left:0;right:0;top:100%;height:48px;background:inherit}
+/* B6: 常去的店 */
+#stores .st-part+.st-part{margin-top:14px}
+.st-h{font-size:13px;color:var(--sub);margin-bottom:2px}
+.st-row{display:grid;grid-template-columns:20px 1fr auto;align-items:center;gap:8px;min-height:56px;border-top:.5px solid var(--sep)}
+.st-h+.st-row{border-top:0}
+.st-rk{color:var(--sub);font-size:15px;text-align:center}
+.st-m{min-width:0;display:flex;flex-direction:column;align-items:flex-start}
+.st-name{min-width:44px;border:0;background:none;font:inherit;font-size:17px;color:var(--ink);padding:0;min-height:44px;text-align:left;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.st-addr{font-size:13px;color:var(--blue);text-decoration:none;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:-10px;padding:2px 0 10px;min-height:28px}
+.st-addr.sub{color:var(--sub)}
+.st-v{display:flex;flex-direction:column;align-items:flex-end}.st-v b{font-size:17px}.st-v small{font-size:13px;color:var(--sub)}
+.st-empty{color:var(--sub);font-size:15px;padding:12px 0;text-align:center}
+.st-tg{display:flex;align-items:center;justify-content:space-between;min-height:44px;margin-top:8px;border-top:.5px solid var(--sep);font-size:15px;cursor:pointer}
+.st-tg input{position:absolute;opacity:0;width:51px;height:31px;margin:0;right:16px}
+.st-tg{position:relative}
+.st-tg i{width:51px;height:31px;border-radius:16px;background:var(--fill);position:relative;flex:0 0 51px}
+.st-tg i::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.2)}
+.st-tg input:checked+i{background:var(--green)}.st-tg input:checked+i::after{transform:translateX(20px)}
+.st-tg input:focus-visible+i{outline:2px solid var(--blue);outline-offset:2px}
+@media (prefers-reduced-motion:no-preference){.st-tg i::after{transition:transform .25s var(--spr)}.st-name{transition:transform .2s var(--spr)}.st-name:active{transform:scale(.97)}}

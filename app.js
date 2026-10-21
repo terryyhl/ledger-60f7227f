@@ -44,6 +44,7 @@ function home(){const ym=rym,m=E.filter(r=>r.ym===ym),ex=exOf(m),inc=incOf(m),dd
  ${mtd(ym)}
  ${homeSubs()}
  ${heatmap(ym)}
+ ${storesCard(ym)}
  ${homeBudget(ym,ex)}
  <div class="sh" style="display:flex;justify-content:space-between"><span>最近 10 笔</span><a class="link" href="#/list" style="text-transform:none;text-decoration:none">全部</a></div>
  ${E.length?`<div class="group ic-rows" id="recent">${sorted(E).slice(0,10).map(txRow).join("")}</div>`:empty('<span class="ti-list" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',"还没有记录","记账管家入账并发布后，记录会显示在这里。")}</div>`}
@@ -61,9 +62,9 @@ function budget(){const ym=rym,m=base(E.filter(r=>r.ym===ym&&r.type==="expense")
  return `<div class="row bud" data-bcat="${esc(c)}" data-used="${u}" style="padding:12px 16px;gap:12px"><span class="badge" style="background:${colorOf(c)}">${esc(c.slice(0,1))}</span><div class="m" style="padding:0"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>${esc(c)}</span><span class="sub num" style="font-size:15px">${fmt(u)} / ${fmt(v)} · ${(p*100).toFixed(1)}%${u>v?` 超支 ${fmt(u-v)}`:""}</span></div>${track(p)}</div></div>`}).join("")}</div>`:""}
  <div class="sf">超出预算显示红色，达到 70% 显示橙色。预算由记账管家设置，只统计 ${BASE} 支出。</div></div>`}
 // ---- list + filter sheet
-const st={q:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false};let sheet=false;
+const st={q:"",payee:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false};let sheet=false;
 const uniq=k=>[...new Set(E.map(r=>r[k]).filter(Boolean))].sort();
-function filtered(){const q=st.q.trim().toLowerCase();return sorted(E.filter(r=>(!st.month||r.ym===st.month)&&(!st.day||r.d===st.day)&&(!st.type||r.type===st.type)&&(!st.category||r.category===st.category)&&(!st.account||r.account===st.account)&&(!st.currency||r.currency===st.currency)&&(!st.pend||isPend(r))
+function filtered(){const q=st.q.trim().toLowerCase();return sorted(E.filter(r=>(!st.payee||r.payee===st.payee)&&(!st.month||r.ym===st.month)&&(!st.day||r.d===st.day)&&(!st.type||r.type===st.type)&&(!st.category||r.category===st.category)&&(!st.account||r.account===st.account)&&(!st.currency||r.currency===st.currency)&&(!st.pend||isPend(r))
  &&qMatch(r,q)))}
 // search: space-separated tokens, all must match. A token matches the payee / note / category / account text, or the amount:
 // "2900" "¥2,900" "2,900円" = amount equals (text containing the digits also matches); ">5000" "<=1000" "1000-3000" = amount range.
@@ -75,11 +76,11 @@ function qTok(r,t){let m;const txt=[r.payee,r.note,r.category,r.account].join(" 
  if(m=t.match(NUMQ)){const n=qNum(m[1]);return Math.abs(r.amount-n)<0.005||txt.includes(m[1])||txt.includes(m[1].replace(/,/g,""))}
  return txt.includes(t)}
 const qMatch=(r,q)=>!q||q.split(/\s+/).filter(Boolean).every(t=>qTok(r,t));
-const anyF=()=>st.q||st.day||st.month||st.type||st.category||st.account||st.currency||st.pend;
+const anyF=()=>st.q||st.payee||st.day||st.month||st.type||st.category||st.account||st.currency||st.pend;
 function chip(k,label,val){return val?`<button class="chip on" data-clr="${k}">${esc(val)} <span class="x">✕</span></button>`:`<button class="chip dd" data-open="1">${label}</button>`}
 function list(){return navbar("明细","",`<div class="search-hit"><label class="search"><span class="mag"></span><input id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="搜索商户、备注、金额或分类" value="${esc(st.q)}"><button class="qclr" data-qclr="1" aria-label="清除搜索"${st.q?"":" hidden"}>✕</button></label></div>
  <div class="chips" id="chips"></div>`)+`<div id="res"></div>`}
-function chipsHTML(){return (st.day?`<button class="chip on" data-clr="day" id="chip-day">${esc(dlabel(st.day))} <span class="x">✕</span></button>`:chip("month","月份",st.month&&mlabel(st.month)))+chip("type","类型",TYPE[st.type])+chip("category","分类",st.category)+chip("account","账户",st.account)+chip("currency","币种",st.currency)+`<button class="chip ${st.pend?"on":""}" data-pend="1">待确认</button>`}
+function chipsHTML(){return (st.payee?`<button class="chip on" data-clr="payee" id="chip-payee">${esc(st.payee)} <span class="x">✕</span></button>`:"")+(st.day?`<button class="chip on" data-clr="day" id="chip-day">${esc(dlabel(st.day))} <span class="x">✕</span></button>`:chip("month","月份",st.month&&mlabel(st.month)))+chip("type","类型",TYPE[st.type])+chip("category","分类",st.category)+chip("account","账户",st.account)+chip("currency","币种",st.currency)+`<button class="chip ${st.pend?"on":""}" data-pend="1">待确认</button>`}
 function listRes(keep){if(!keep)lim.list=PAGE;$("#chips").innerHTML=chipsHTML();const qc=$(".qclr");if(qc)qc.hidden=!st.q;const a=filtered();
  $("#res").innerHTML=`<div class="wrap"><div class="sf" style="padding-top:4px"><span id="cnt">${a.length}</span> 笔 · 支出 ${fmt(exOf(a))} · 收入 ${fmt(incOf(a))}</div>${curNote(a)}${a.length?days(a,g=>"支出 "+fmt(exOf(g)),lim.list)+more("list",a.length):E.length?
  empty('<span class="mag" style="transform:scale(2)"></span>',"没有找到结果",`没有符合${st.q?`“${esc(st.q)}”和`:""}当前筛选的记录。`,'<button class="btn sec" data-reset="1">清除筛选</button>'):
@@ -209,6 +210,27 @@ const subItems=()=>((SUBS&&Array.isArray(SUBS.items))?SUBS.items:[]).filter(it=>
  .map((it,i)=>({...it,i,amount:+it.amount,next:nextCharge(it)})).sort((a,b)=>a.next.localeCompare(b.next)||b.amount-a.amount);
 function subTotals(a=subItems()){const mo=sum(a.filter(x=>x.cycle==="monthly")),yr=sum(a.filter(x=>x.cycle==="yearly"));return {mo,yr,eff:Math.round(mo+yr/12),annual:mo*12+yr}}
 const subsDue=()=>subItems().filter(x=>daysTo(x.next)<=7).length;
+// ---- 常去的店 (merchants.enc.json: {payee:{address,lat,lng,online}}; undefined = not loaded, null = missing/unreadable → no addresses)
+let MER;const MER_ON="ledger.merch.online";   // localStorage holds only "1"/"0" (include online merchants)
+async function loadMerch(){try{const r=await fetch((TESTPLAIN?"data/merchants.json":ENC.merch)+"?t="+Date.now(),{cache:"no-store"});MER=r.ok?(TESTPLAIN?await r.json():await decryptWith(KEY,await r.json())):null;if(MER&&typeof MER!=="object")MER=null}catch{MER=null}
+ if(route()==="home"){const el=$("#stores");if(el)el.outerHTML=storesCard(rym)}}
+const merOnline=()=>{try{return localStorage.getItem(MER_ON)==="1"}catch{return false}};
+const STORE_SKIP=new Set(["家政","买菜","订阅"]);
+function storeStats(ym,withOnline){const m=E.filter(r=>r.ym===ym&&r.type==="expense"&&!r.deleted&&r.currency===BASE&&r.payee&&!STORE_SKIP.has(r.category));const by={};
+ m.forEach(r=>{const k=r.payee,o=by[k]||(by[k]={payee:k,days:new Set(),amt:0,last:""});o.days.add(r.d);o.amt+=r.amount;if(r.d>o.last)o.last=r.d});
+ const info=k=>MER&&MER[k]&&typeof MER[k]==="object"?MER[k]:null,isOnline=k=>{if(!MER)return false;const i=info(k);return !i||!!i.online||!i.address};   // MER missing → can't tell, keep all
+ const all=Object.values(by).map(o=>({...o,visits:o.days.size,info:info(o.payee),online:isOnline(o.payee)})),a=withOnline?all:all.filter(o=>!o.online);
+ const tie=(x,y)=>y.amt-x.amt||y.last.localeCompare(x.last)||x.payee.localeCompare(y.payee);
+ return {visits:[...a].sort((x,y)=>y.visits-x.visits||tie(x,y)).slice(0,3),spend:[...a].sort((x,y)=>tie(x,y)).slice(0,3),hidden:all.length-a.length}}
+const mapURL=(n,i)=>"https://maps.apple.com/?"+(i.lat!=null&&i.lng!=null&&isFinite(+i.lat)&&isFinite(+i.lng)?`q=${encodeURIComponent(n)}&ll=${+i.lat},${+i.lng}`:`address=${encodeURIComponent(i.address)}&q=${encodeURIComponent(n)}`);
+function storeRow(o,rank,kind,ym){const i=o.info,addr=i&&i.address&&!i.online?`<a class="st-addr" href="${esc(mapURL(o.payee,i))}" target="_blank" rel="noopener" aria-label="在地图中打开 ${esc(o.payee)}">${esc(i.address)}</a>`:o.online?`<span class="st-addr sub">线上商户</span>`:"";
+ return `<div class="st-row" data-payee="${esc(o.payee)}" data-visits="${o.visits}" data-amt="${o.amt}"><span class="st-rk num">${rank}</span><div class="st-m"><button class="st-name" data-jp="${esc(o.payee)}" data-jm="${ym}">${esc(o.payee)}</button>${addr}</div>
+ <div class="st-v num"><b>${kind==="v"?o.visits+" 次":fmt(o.amt)}</b><small>${kind==="v"?fmt(o.amt):o.visits+" 次"}</small></div></div>`}
+function storesCard(ym){const on=merOnline(),S=storeStats(ym,on),sw=`<label class="st-tg"><span>包含线上商户</span><input type="checkbox" role="switch" id="st-online"${on?" checked":""}><i aria-hidden="true"></i></label>`;
+ const part=(t,a,k,id)=>`<div class="st-part" id="${id}"><div class="st-h">${t}</div>${a.map((o,j)=>storeRow(o,j+1,k,ym)).join("")}</div>`;
+ const body=S.visits.length?part("去得最多",S.visits,"v","st-visits")+part("花得最多",S.spend,"s","st-spend"):`<div class="st-empty" id="st-empty">${mlabel(ym)}还没有${on?"":"线下"}常去的店${S.hidden&&!on?`<br><small>${S.hidden} 家线上商户未计入</small>`:""}</div>`;
+ return `<div class="card" id="stores"><h2>常去的店<small>${MER===null?"地址暂不可用":"按天计次 · JPY"}</small></h2>${body}${sw}</div>`}
+document.addEventListener("change",e=>{if(e.target.id!=="st-online")return;try{localStorage.setItem(MER_ON,e.target.checked?"1":"0")}catch{}const el=$("#stores");if(el)el.outerHTML=storesCard(rym)});
 async function loadSubs(){try{const r=await fetch((TESTPLAIN?"data/subscriptions.json":ENC.subs)+"?t="+Date.now(),{cache:"no-store"});SUBS=r.ok?(TESTPLAIN?await r.json():await decryptWith(KEY,await r.json())):null}catch{SUBS=null}
  if(["home","subs"].includes(route())){const y=scrollY;render();scrollTo(0,y)}else subBadge()}
 function subBadge(){const n=SUBS?subsDue():0,c=$("#pcnt");if(c){c.hidden=!n;c.textContent=n||""}}
@@ -247,9 +269,9 @@ function mtd(ym){const isNow=ym===nowYM(),n=isNow?+today().slice(8):dimYM(ym),pm
  return `<div class="mtd" id="mtd" data-cur="${cur}" data-prev="${prev}" data-n="${n}" data-pn="${pn}"><div><small>${isNow?`本月至今 1–${n}日`:`${mlabel(ym)} 1–${n}日`}</small><b class="num">${fmt(cur)}</b></div>
  <div><small>上月同期 ${mlabel(pm)} 1–${pn}日${note}</small><b class="num">${fmt(prev)}</b></div>
  <div><small>差额</small><b class="num ${prev&&d>0?"up":prev&&d<0?"down":""}" id="mtd-d">${prev?(d>=0?"+":"-")+fmt(Math.abs(d))+" · "+(d>=0?"+":"")+(d/prev*100).toFixed(1)+"%":"—"}</b></div></div>`}
-function jump(o){Object.assign(st,{q:"",type:"",category:"",account:"",currency:"",pend:false,month:"",day:""},o);const q=$("#q");if(q)q.value="";
+function jump(o){Object.assign(st,{q:"",payee:"",type:"",category:"",account:"",currency:"",pend:false,month:"",day:""},o);const q=$("#q");if(q)q.value="";
  if(route()==="list"){listRes();scrollTo(0,0)}else location.hash="#/list"}
-document.addEventListener("click",e=>{const b=e.target.closest("[data-jd],[data-jc]");if(!b||b.closest("#overlay"))return;e.stopPropagation();const d=b.dataset;
+document.addEventListener("click",e=>{const p=e.target.closest("[data-jp]");if(p&&!p.closest("#overlay")){e.stopPropagation();return jump({payee:p.dataset.jp,month:p.dataset.jm||"",type:"expense"})}const b=e.target.closest("[data-jd],[data-jc]");if(!b||b.closest("#overlay"))return;e.stopPropagation();const d=b.dataset;
  if(d.jd)jump({day:d.jd,month:d.jd.slice(0,7)});else jump({category:d.jc||"",month:d.jm||"",type:"expense"})},true);
 // ---- foldable / wide: two-pane list + detail. State lives in JS (selId, st, scroll), so resizing/folding never reloads.
 const WIDEQ=matchMedia("(min-width: 600px), (horizontal-viewport-segments: 2)");
@@ -307,17 +329,17 @@ document.addEventListener("click",e=>{const mb=e.target.closest("[data-more]");i
  if(b.id==="newbar")return applyPending();
  if(d.refresh!=null)return refresh();if(d.retry!=null)return boot();if(d.eclose!=null)return closeEntry();if(d.id!=null)return openFromRow(d.id,b.closest("#res .row,.row"));
  if(d.m){rmode=d.m;render()}else if(d.p){shiftPeriod(+d.p)}else if(d.now){rym=nowYM();ryr=rym.slice(0,4);render()}
- else if(d.drill!=null){Object.assign(st,{q:"",day:"",type:"expense",category:d.drill,account:"",currency:"",pend:false,month:rmode==="m"?rym:""})}
+ else if(d.drill!=null){Object.assign(st,{q:"",payee:"",day:"",type:"expense",category:d.drill,account:"",currency:"",pend:false,month:rmode==="m"?rym:""})}
  else if(d.qclr!=null){e.preventDefault();st.q="";const q=$("#q");q.value="";listRes();q.focus()}
  else{if(d.open)sheet=true;if(d.close)sheet=false;if(d.clr){st[d.clr]="";if(d.clr==="day")st.month=""}if(d.pend)st.pend=!st.pend;if(d.type!=null)st.type=d.type;if(d.cat!=null)st.category=st.category===d.cat?"":d.cat;
-  if(d.reset){Object.assign(st,{q:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false});const q=$("#q");if(q)q.value=""}listRes()}});
+  if(d.reset){Object.assign(st,{q:"",payee:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false});const q=$("#q");if(q)q.value=""}listRes()}});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){if($("#rviewer"))return rvClose();closeEntry()}if(e.key==="Enter"&&e.target.dataset&&e.target.dataset.id)openEntry(e.target.dataset.id)});
 window.addEventListener("hashchange",go);
 // ---- encrypted data (AES-256-GCM, PBKDF2-SHA256). Only *.enc.json is published; the derived key is kept in memory,
 // or (「在这台设备上记住」) in IndexedDB as a NON-extractable CryptoKey. The password itself is never stored.
 // Decrypted JSON is never written to the SW cache / localStorage (the SW only ever sees the ciphertext files).
 const TESTPLAIN=!!window.__LEDGER_TEST_PLAINTEXT;   // set only by the local test harness (fixture servers); never in the deployed page
-const ENC={ledger:"data/ledger.enc.json",subs:"data/subscriptions.enc.json"};
+const ENC={ledger:"data/ledger.enc.json",subs:"data/subscriptions.enc.json",merch:"data/merchants.enc.json"};
 let KEY=null;const b64d=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 const idb=(mode,fn)=>new Promise((res,rej)=>{const o=indexedDB.open("ledger-keys",1);o.onupgradeneeded=()=>o.result.createObjectStore("k");o.onerror=()=>rej(o.error);
  o.onsuccess=()=>{const t=o.result.transaction("k",mode),s=t.objectStore("k"),r=fn(s);t.oncomplete=()=>{o.result.close();res(r&&r.result)};t.onerror=()=>rej(t.error)}});
@@ -330,7 +352,7 @@ class Locked extends Error{}
 async function currentKey(){if(KEY)return KEY;const k=await keyLoad();if(k&&k.key)KEY=k;return KEY}
 async function openEnc(enc){const K=await currentKey();if(!K)throw new Locked("locked");
  try{return await decryptWith(K,enc)}catch(e){KEY=null;await keyClear();throw new Locked("key no longer works")}}   // e.g. password changed
-function wipe(){rcRevoke();ghostsClear();MV.list=false;selId=null;{const p=$("#pane");if(p){p.innerHTML="";delete p.dataset.k}}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;lim.list=PAGE;Object.assign(st,{q:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
+function wipe(){rcRevoke();ghostsClear();MV.list=false;selId=null;{const p=$("#pane");if(p){p.innerHTML="";delete p.dataset.k}}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;MER=undefined;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;lim.list=PAGE;Object.assign(st,{q:"",payee:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
  ["#app","#overlay","#sheet"].forEach(q=>{const el=$(q);if(el)el.innerHTML=""});const t=$("#toast");if(t){t.textContent="";t.classList.remove("show")}
  const nb=$("#newbar");if(nb)nb.hidden=true;const c=$("#pcnt");if(c){c.hidden=true;c.textContent=""}document.body.style.overflow=""}
 async function lock(){KEY=null;wipe();await keyClear();showUnlock()}
@@ -369,7 +391,7 @@ function setBusy(v){busy=v;document.querySelectorAll(".rbtn").forEach(b=>b.class
 async function refresh(){if(busy)return;setBusy(true);const old=new Set(E.map(r=>r.id));
  try{const {L,cached,server}=await fetchLedger();lastCheck=Date.now();apply(L);pendingL=null;$("#newbar").hidden=true;
   if(cached){rerender();toast(server?"服务器暂时不可用，显示缓存数据":"离线，显示缓存数据")}else{lastUpd=Date.now();rerender();toast(`已更新 · +${E.filter(r=>!old.has(r.id)).length} 条`)}}
- catch(e){if(e instanceof Locked){setBusy(false);ptrReset();return showUnlock("密码已更改或已失效，请重新输入")}toast(e&&e.server?"服务器暂时不可用，显示缓存数据":"离线，显示缓存数据")}finally{setBusy(false);ptrReset();if(KEY||TESTPLAIN)loadSubs()}}
+ catch(e){if(e instanceof Locked){setBusy(false);ptrReset();return showUnlock("密码已更改或已失效，请重新输入")}toast(e&&e.server?"服务器暂时不可用，显示缓存数据":"离线，显示缓存数据")}finally{setBusy(false);ptrReset();if(KEY||TESTPLAIN){loadSubs();loadMerch()}}}
 function applyPending(){if(!pendingL)return;const old=new Set(E.map(r=>r.id));apply(pendingL);pendingL=null;lastUpd=Date.now();$("#newbar").hidden=true;rerender();toast(`已更新 · +${E.filter(r=>!old.has(r.id)).length} 条`)}
 async function silentCheck(){lastCheck=Date.now();try{const {L,cached}=await fetchLedger();if(!cached&&sigOf(L)!==sig){pendingL=L;$("#newbar").hidden=false}}catch(e){if(e instanceof Locked)showUnlock("密码已更改或已失效，请重新输入")}}
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&E&&sig&&Date.now()-lastCheck>5*60e3)silentCheck()});
@@ -400,7 +422,7 @@ document.addEventListener("touchcancel",()=>{ptrArm(false);if(tx&&tx.axis==="ptr
 // ---- boot
 const SKEL=`<div class="top"><div class="lt"><h1>账本</h1></div></div><div class="wrap" id="skeleton" aria-busy="true" aria-label="加载中"><div class="sk" style="width:45%;height:34px;margin:8px 0 16px"></div><div class="sk" style="height:150px;border-radius:12px"></div><div class="sk" style="height:52px;margin-top:12px;border-radius:12px"></div><div class="sk" style="width:30%;height:13px;margin:24px 0 8px"></div>${'<div class="sk" style="height:60px;margin-top:2px;border-radius:12px"></div>'.repeat(5)}</div>`;
 async function boot(){if(!TESTPLAIN&&!(await currentKey()))return showUnlock();document.body.classList.remove("locked");$("#app").innerHTML=SKEL;
- try{const {L,cached,server}=await fetchLedger();apply(L);lastCheck=Date.now();if(!cached)lastUpd=Date.now();render();loadSubs();if(cached)toast(server?"服务器暂时不可用，显示缓存数据":"离线，显示缓存数据")}
+ try{const {L,cached,server}=await fetchLedger();apply(L);lastCheck=Date.now();if(!cached)lastUpd=Date.now();render();loadSubs();loadMerch();if(cached)toast(server?"服务器暂时不可用，显示缓存数据":"离线，显示缓存数据")}
  catch(e){if(e instanceof Locked)return showUnlock("密码已更改或已失效，请重新输入");$("#app").innerHTML=navbar("账本")+empty('<span style="font-size:30px;font-weight:600;color:var(--sub)">!</span>',...(e&&e.server?["服务器暂时不可用","服务器出错了，本机也还没有缓存数据。稍后再试一次。"]:["连不上网络","没能读取账目数据。检查网络后再试一次。"]),'<button class="btn sec" data-retry="1">重试</button>')}}
 boot();
 if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});

@@ -36,3 +36,5 @@ mk_receipt_fixture.py
 test_statusbar.py
 test_b5.py
 rec_b5.py
+test_b6a.py
+test_b6b.py
