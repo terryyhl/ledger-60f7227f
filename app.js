@@ -173,7 +173,7 @@ function trendCard(){const T=trendData(),vis=T.cats.filter(c=>!TR.off.has(c)),n=
  const mover=(t,r,id)=>`<div class="tr-mv" id="${id}"><small>${t}</small>${r?`<b><i style="background:${colorOf(r.c)}"></i>${esc(r.c)}</b><span class="num">${r.d>0?"+":"-"}${fmt(Math.abs(r.d))} · ${pctTxt(r.v,r.p)}</span>`:`<b>—</b><span class="num">—</span>`}</div>`;
  const ok=Object.keys(T.other);
  return `<div class="card" id="trend" data-scope="${TS}"><h2>分类趋势图<small>${mlabel(T.ms[0])}–${mlabel(T.ms[n-1])} · ${TS==="all"?"":SC_L[TS]+" "}JPY 支出</small></h2>
- <div class="seg tr-seg">${segs}</div>${scSeg("trend",TS)}${trendSVG(T,vis,si)}
+ <div class="seg tr-seg">${segs}</div>${scSeg("trend",TS)}<a class="tr-year" id="tr-year" href="#/year?y=${T.ms[n-1].slice(0,4)}">${T.ms[n-1].slice(0,4)} 年度视图 <b aria-hidden="true">›</b></a>${trendSVG(T,vis,si)}
  <div class="tr-chips">${chips||'<span class="sub" style="font-size:13px">这段时间没有 JPY 支出</span>'}</div>${det}
  <div class="tr-mvs">${mover("涨得最多",up,"tr-up")}${mover("降得最多",dn,"tr-dn")}</div>
  ${ok.length?`<div class="cur" id="tr-other">其他币种支出（不换算，未计入图表）：${ok.map(c=>fmt(T.other[c],c)).join(" · ")}</div>`:""}</div>`}
@@ -300,6 +300,22 @@ function insights(ym){const isNow=ym===nowYM(),n=isNow?+today().slice(8):dimYM(y
  return out.sort((a,b)=>b.score-a.score).slice(0,2)}
 function insightsCard(ym){const a=insights(ym);if(!a.length)return "";
  return `<div class="card ins" id="insights" aria-label="本月洞察"><h2>${ym===nowYM()?"本月洞察":mlabel(ym)+"洞察"}</h2>${a.map(i=>i.k==="cat"?`<button class="ins-r" data-ins="${i.k}" data-jc="${esc(i.c)}" data-jm="${i.m}"><span class="ins-dot" aria-hidden="true"></span><span>${esc(i.t)}</span><b class="chev" aria-hidden="true">›</b></button>`:`<div class="ins-r" data-ins="${i.k}"><span class="ins-dot" aria-hidden="true"></span><span>${esc(i.t)}</span></div>`).join("")}</div>`}
+// ---- b9 年度视图 (#/year?y=2026): 12 monthly totals with the 固定/日常 split, category shares; ‹ › switches year, a month opens its report.
+const yearP=()=>{const m=/[?&]y=(\d{4})/.exec(location.hash);return m?m[1]:nowYM().slice(0,4)};
+function year(){const y=yearP(),mn=E.reduce((m,r)=>r.y<m?r.y:m,nowYM().slice(0,4)),mx=mxYM().slice(0,4);
+ const ex=E.filter(r=>r.y===y&&r.type==="expense"&&jy(r)!=null),S=a=>a.reduce((s,r)=>s+jy(r),0);
+ const M=[...Array(12)].map((_,i)=>{const ym=y+"-"+pad(i+1),a=ex.filter(r=>r.ym===ym),f=S(a.filter(r=>FIXED.has(r.category)));return {ym,t:S(a),f,d:S(a)-f}});
+ const tot=S(ex),fx=M.reduce((s,m)=>s+m.f,0),mxv=niceMax(Math.max(0,...M.map(m=>m.t))),cats=Object.entries(groupBy(ex,"category")).map(([k,a])=>[k,S(a)]).sort((a,b)=>b[1]-a[1]);
+ const back=`<a class="nb" href="#/report"><span class="chev" style="transform:rotate(-135deg) scale(.8);border-color:var(--blue)"></span>报表</a>`;
+ const sw=`<div class="period yr-sw" style="display:flex;align-items:center;justify-content:space-between;margin:4px -8px 0"><a class="nb pbtn" style="font-size:24px;text-decoration:none" id="yr-prev" ${y>mn?`href="#/year?y=${+y-1}"`:'aria-disabled="true"'} aria-label="上一年">‹</a><b id="yr-t">${y}年</b><a class="nb pbtn" style="font-size:24px;text-decoration:none" id="yr-next" ${y<mx?`href="#/year?y=${+y+1}"`:'aria-disabled="true"'} aria-label="下一年">›</a></div>`;
+ const H=150,bw=16;let svg=`<svg class="yr-svg" viewBox="0 0 ${12*28} ${H+18}" width="100%" role="img" aria-label="${y}年每月支出">`;
+ M.forEach((m,i)=>{const x=i*28+6,hf=m.f/mxv*H,hd=m.d/mxv*H;svg+=`<g class="yr-bar" data-ym="${m.ym}" data-t="${m.t}" data-f="${m.f}" data-d="${m.d}">`+(m.t?`<rect x="${x}" y="${(H-hf-hd).toFixed(1)}" width="${bw}" height="${hd.toFixed(1)}" rx="3" style="fill:var(--blue)"/><rect x="${x}" y="${(H-hf).toFixed(1)}" width="${bw}" height="${hf.toFixed(1)}" rx="3" style="fill:var(--ter)"/>`:`<rect x="${x}" y="${H-3}" width="${bw}" height="3" rx="1.5" style="fill:var(--fill)"/>`)+`<text x="${x+bw/2}" y="${H+14}" text-anchor="middle" class="tr-ax">${i+1}</text></g>`});
+ svg+=`</svg>`;
+ return navbar(`${y}年`,back)+`<div class="wrap">${sw}<div class="summary"><div class="lbl">${y}年支出 · JPY</div><div class="big num" id="yr-tot">${fmt(tot)}</div><div class="three"><div><small>日常</small><b class="num" id="yr-d">${fmt(tot-fx)}</b></div><div><small>固定</small><b class="num" id="yr-f">${fmt(fx)}</b></div><div><small>月均</small><b class="num">${fmt(Math.round(tot/(y===nowYM().slice(0,4)?+nowYM().slice(5):12)))}</b></div></div></div>
+ <div class="card"><h2>每月支出<small><i class="yr-k" style="background:var(--blue)"></i>日常 <i class="yr-k" style="background:var(--ter)"></i>固定</small></h2>${svg}</div>
+ <div class="sh">每月明细</div><div class="group" id="yr-months">${M.map(m=>`<button class="row yr-m" data-yjm="${m.ym}" data-t="${m.t}" aria-label="${mlabel(m.ym)} 报表"><span class="m">${mlabel(m.ym)}</span><span class="yr-split sub num">日常 ${fmt(m.d)} · 固定 ${fmt(m.f)}</span><span class="num">${fmt(m.t)}</span><span class="chev"></span></button>`).join("")}</div>
+ <div class="card" id="yr-cats"><h2>分类占比<small>${y}年</small></h2>${cats.length?cats.map(([k,v])=>`<div class="rk" data-k="${esc(k)}" data-v="${v}" style="padding:8px 0"><div style="display:flex;justify-content:space-between;font-size:15px;margin-bottom:6px"><span>${esc(k)}${FIXED.has(k)?' <small class="sub">固定</small>':""}</span><span class="sub num">${fmt(v)} · ${(v/tot*100).toFixed(1)}%</span></div><div class="track"><i style="width:${(v/cats[0][1]*100).toFixed(1)}%;background:${colorOf(k)}"></i></div></div>`).join(""):'<div class="sub" style="font-size:15px;padding:8px 0">这一年没有 JPY 支出</div>'}</div></div>`}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-yjm]");if(!b)return;rmode="m";rym=b.dataset.yjm;ryr=rym.slice(0,4);location.hash="#/report"});
 async function loadSubs(){try{const r=await fetch((TESTPLAIN?"data/subscriptions.json":ENC.subs)+"?t="+Date.now(),{cache:"no-store"});SUBS=r.ok?(TESTPLAIN?await r.json():await decryptWith(KEY,await r.json())):null}catch{SUBS=null}
  if(["home","subs"].includes(route())){const y=scrollY;render();scrollTo(0,y)}else subBadge()}
 function subBadge(){const n=SUBS?subsDue():0,c=$("#pcnt");if(c){c.hidden=!n;c.textContent=n||""}}
@@ -384,10 +400,10 @@ function unlockOut(){const u=$("#unlock");if(!u)return;const g=document.createEl
  g.querySelectorAll("[id]").forEach(x=>x.removeAttribute("id"));g.querySelectorAll("input").forEach(x=>x.value="");document.body.appendChild(g);MV.unlock=true;
  const a=mv(g,[{opacity:1,transform:"none"},{opacity:0,transform:"scale(1.04)"}],{d:300,e:"cubic-bezier(.3,0,.2,1)"});if(!a)return g.remove();a.finished.then(()=>g.remove(),()=>g.remove())}
 // ---- router
-const ROUTES={home,list,subs,budget,report};const route=()=>location.hash.replace(/^#\/?/,"").split("?")[0]||"home";
+const ROUTES={home,list,subs,budget,report,year};const route=()=>location.hash.replace(/^#\/?/,"").split("?")[0]||"home";
 let lastRoute="";
 function render(){if(route()==="pending"){history.replaceState(null,"","#/subs")}const k=route(),fn=ROUTES[k]||home,changed=k!==lastRoute;lastRouteWas=lastRoute;if(k!==lastRoute&&$("#overlay").innerHTML){closeEntry()}lastRoute=k;if(k!=="list")$("#sheet").innerHTML="";
- $("#app").innerHTML=fn();const tk=k==="budget"?"home":k;document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.r===tk));
+ $("#app").innerHTML=fn();const tk=k==="budget"?"home":k==="year"?"report":k;document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.r===tk));
  subBadge();if(k==="list")listRes("h");trendScroll();layout();afterRender(k,changed)}
 const go=()=>{if(route()==="list"&&lastRoute==="list"&&$("#res")){const n=hashP();if(n!==pg){pg=n;listRes(true);pageTop();return}}render();window.scrollTo(0,0)};
 function pageTop(){const r=$("#res");if(!r)return;const y=Math.max(0,r.getBoundingClientRect().top+scrollY-($(".top")?$(".top").getBoundingClientRect().height:0)-8);if(scrollY>y)scrollTo({top:y,behavior:RM.matches?"auto":"smooth"});

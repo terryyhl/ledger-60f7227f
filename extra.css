@@ -232,3 +232,12 @@ html{background:var(--bg)}
 /* B9: 固定/日常 segmented control (44px hit height) */
 .sc-seg{margin:12px 0 8px}
 #trend .sc-seg{margin:8px 0}
+/* B9: 年度视图 */
+.tr-year{display:flex;align-items:center;justify-content:flex-end;gap:4px;min-height:44px;color:var(--blue);text-decoration:none;font-size:15px}
+.yr-svg{display:block;margin-top:4px}
+.yr-k{display:inline-block;width:8px;height:8px;border-radius:2px;margin:0 3px 0 8px;vertical-align:0}
+button.row.yr-m{width:100%;border:0;background:var(--card);font:inherit;color:var(--ink);text-align:left;min-height:44px;cursor:pointer}
+.yr-split{font-size:12px;flex:1;min-width:0;text-align:right;margin-right:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.yr-sw b{font-size:17px}
+.pbtn[aria-disabled="true"]{color:var(--dis);pointer-events:none}
+@media (prefers-reduced-motion:no-preference){button.yr-m{transition:transform .2s var(--spr)}button.yr-m:active{transform:scale(.98)}}
