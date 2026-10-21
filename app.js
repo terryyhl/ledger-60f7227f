@@ -15,7 +15,7 @@ function tokyo(dt){dt=String(dt||"");const t=/(Z|[+-]\d\d:?\d\d)$/.test(dt)?Date
 const today=()=>tokyo(new Date().toISOString()).d,nowYM=()=>today().slice(0,7);
 const conf=r=>r.confidence==null||r.confidence===""||isNaN(+r.confidence)?1:+r.confidence;
 const isPend=r=>conf(r)<0.8;
-function norm(r){const t=tokyo(r.datetime);const {attachment,...rest}=r;return {...rest,hasAtt:!!attachment,amount:Math.abs(+r.amount||0),currency:r.currency||"JPY",d:t.d,ym:t.d.slice(0,7),y:t.d.slice(0,4),hm:t.hm,key:t.d+"T"+t.hm+"|"+r.datetime}}
+function norm(r){const t=tokyo(r.datetime);const {attachment,...rest}=r;const rc=rest.receipt,ok=rc&&/^[0-9a-f]{32}$/.test(rc.id)&&/^[0-9a-f]{32}$/.test(rc.thumb);delete rest.receipt;return {...rest,hasAtt:!!attachment||!!ok,rc:ok?{id:rc.id,thumb:rc.thumb,w:+rc.w||0,h:+rc.h||0}:null,amount:Math.abs(+r.amount||0),currency:r.currency||"JPY",d:t.d,ym:t.d.slice(0,7),y:t.d.slice(0,4),hm:t.hm,key:t.d+"T"+t.hm+"|"+r.datetime}}
 const base=a=>a.filter(r=>r.currency===BASE),sum=a=>a.reduce((s,r)=>s+r.amount,0);
 const exOf=a=>sum(base(a).filter(r=>r.type==="expense")),incOf=a=>sum(base(a).filter(r=>r.type==="income"));
 const groupBy=(a,k)=>a.reduce((o,r)=>((o[r[k]]=o[r[k]]||[]).push(r),o),{});
@@ -170,10 +170,32 @@ const SRC={screenshot:"截图",text:"文字",voice:"录音",audio:"录音",manua
 function entrySheet(r){const s=r.type==="income"?"+":r.type==="transfer"?"":"-";const f=(k,v,id)=>`<div class="row"><span class="m">${k}</span><span class="v" data-f="${id}" style="white-space:normal;text-align:right;max-width:65%">${v}</span></div>`;
  return `<div class="dim" data-eclose="1"></div><div class="sheet" id="entry" role="dialog" aria-label="账目详情"><div class="grab"></div><div class="navbar"><span></span><span class="t">账目详情</span><button class="nb b" data-eclose="1">完成</button></div><div class="body" style="padding:0 16px 24px">
  <div style="text-align:center;padding:16px 0 4px"><div class="big num ${r.type==="income"?"in":""}" style="font-size:40px;font-weight:700" data-f="amount">${s}${fmt(r.amount,r.currency)}</div><div class="sub" style="font-size:15px;margin-top:4px">${esc(r.payee||"—")}${isPend(r)?'<span class="tag">待确认</span>':""}</div></div>
- <div class="group" style="margin-top:16px">${f("时间",esc(r.d+" "+r.hm),"time")}${f("类型",TYPE[r.type],"type")}${f("分类",esc(r.category||"—"),"category")}${f("账户",esc(r.account||"—"),"account")}${f("商户",esc(r.payee||"—"),"payee")}${f("备注",esc(r.note||"—"),"note")}${f("来源",esc(SRC[r.source]||r.source||"—"),"source")}${f("币种",esc(r.currency),"currency")}${f("状态",isPend(r)?'<span class="tag" style="margin:0">待确认</span>':"已确认","pending")}${r.confidence!=null?f("识别置信度",Math.round(+r.confidence*100)+"%","confidence"):""}${f("收据",r.hasAtt?"有（暂不显示）":"无","attachment")}${(()=>{try{const t=r.updated_at&&!isNaN(Date.parse(r.updated_at))?tokyo(r.updated_at):null;return t?f("更新于",esc(t.d+" "+t.hm),"updated"):""}catch{return ""}})()}${f("编号",'<span class="num" style="font-size:13px;color:var(--sub)">'+esc(r.id)+'</span>',"id")}</div>
- ${isPend(r)?'<div class="readonly">这笔还没确认。需要改的话，告诉记账管家。</div>':""}</div></div>`}
-const openEntry=(id,force)=>{const r=E.find(x=>x.id===id);if(!r)return;if(route()==="list")selId=id;if(!force&&isWide()&&route()==="list"){layout();document.querySelectorAll("#res .row.sel").forEach(x=>x.classList.remove("sel"));const rw=document.querySelector(`#res .row[data-id="${CSS.escape(id)}"]`);if(rw)rw.classList.add("sel");return}$("#overlay").innerHTML=entrySheet(r);document.body.style.overflow="hidden"};
-const closeEntry=()=>{const inPane=!!$("#pane #entry");$("#overlay").innerHTML="";document.body.style.overflow="";if(inPane||!isWide()){selId=null;document.querySelectorAll("#res .row.sel").forEach(x=>x.classList.remove("sel"))}if(inPane)layout()};
+ ${r.rc?`<div class="rc" id="rc" data-th="${r.rc.thumb}" data-full="${r.rc.id}"><button class="rc-th" data-rview="1" aria-label="查看收据大图"><span class="rc-ph">正在解密收据…</span></button></div>`:r.hasAtt?`<div class="rc" id="rc"><div class="rc-th"><span class="rc-ph err">收据暂不可用</span></div></div>`:""}
+ <div class="group" style="margin-top:16px">${f("时间",esc(r.d+" "+r.hm),"time")}${f("类型",TYPE[r.type],"type")}${f("分类",esc(r.category||"—"),"category")}${f("账户",esc(r.account||"—"),"account")}${f("商户",esc(r.payee||"—"),"payee")}${f("备注",esc(r.note||"—"),"note")}${f("来源",esc(SRC[r.source]||r.source||"—"),"source")}${f("币种",esc(r.currency),"currency")}${f("状态",isPend(r)?'<span class="tag" style="margin:0">待确认</span>':"已确认","pending")}${r.confidence!=null?f("识别置信度",Math.round(+r.confidence*100)+"%","confidence"):""}${f("收据",r.rc?"有（见下方）":r.hasAtt?"有（尚未上传）":"无","attachment")}${(()=>{try{const t=r.updated_at&&!isNaN(Date.parse(r.updated_at))?tokyo(r.updated_at):null;return t?f("更新于",esc(t.d+" "+t.hm),"updated"):""}catch{return ""}})()}${f("编号",'<span class="num" style="font-size:13px;color:var(--sub)">'+esc(r.id)+'</span>',"id")}</div>
+  ${isPend(r)?'<div class="readonly">这笔还没确认。需要改的话，告诉记账管家。</div>':""}</div></div>`}
+const openEntry=(id,force)=>{const r=E.find(x=>x.id===id);if(!r)return;if(route()==="list")selId=id;if(!force&&isWide()&&route()==="list"){layout();document.querySelectorAll("#res .row.sel").forEach(x=>x.classList.remove("sel"));const rw=document.querySelector(`#res .row[data-id="${CSS.escape(id)}"]`);if(rw)rw.classList.add("sel");return}rcRevoke();$("#overlay").innerHTML=entrySheet(r);document.body.style.overflow="hidden";rcLoad()};
+const closeEntry=()=>{const inPane=!!$("#pane #entry");rcRevoke();$("#overlay").innerHTML="";document.body.style.overflow="";if(inPane||!isWide()){selId=null;document.querySelectorAll("#res .row.sel").forEach(x=>x.classList.remove("sel"))}if(inPane)layout()};
+// ---- encrypted receipts: data/r/<id>.bin = iv(12) || AES-GCM(ct||tag), AAD = id, same key as the ledger. Decrypted bytes live only in blob: URLs, all revoked on close/lock.
+const BLOBS=new Set();let rcGen=0;
+function rcRevoke(){rcGen++;BLOBS.forEach(u=>URL.revokeObjectURL(u));BLOBS.clear();const v=$("#rviewer");if(v)v.remove();document.querySelectorAll("#entry .rc img").forEach(i=>i.removeAttribute("src"))}
+async function rcGet(id){const g=rcGen;if(!KEY||!KEY.key)throw new Error("locked");const r=await fetch("data/r/"+id+".bin");if(!r.ok)throw new Error("HTTP "+r.status);const b=new Uint8Array(await r.arrayBuffer());if(b.length<29)throw new Error("short");
+ const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:b.slice(0,12),additionalData:new TextEncoder().encode(id)},KEY.key,b.slice(12));if(g!==rcGen)throw new Error("stale");const u=URL.createObjectURL(new Blob([pt],{type:"image/webp"}));BLOBS.add(u);return u}
+async function rcLoad(){document.querySelectorAll("#entry .rc[data-th]:not([data-st])").forEach(async el=>{el.dataset.st="loading";const btn=el.querySelector(".rc-th");
+ try{const u=await rcGet(el.dataset.th);if(!el.isConnected){URL.revokeObjectURL(u);BLOBS.delete(u);return}btn.innerHTML=`<img src="${u}" alt="收据缩略图" decoding="async">`;el.dataset.st="ok"}
+ catch(e){if(e.message==="stale")return;el.dataset.st="err";btn.innerHTML='<span class="rc-ph err">收据无法读取</span>';btn.disabled=true}})}
+function rcView(id){const old=$("#rviewer");if(old)old.remove();const v=document.createElement("div");v.id="rviewer";v.setAttribute("role","dialog");v.setAttribute("aria-label","收据");
+ v.innerHTML=`<div class="rv-stage" id="rv-stage"><span class="rc-ph" id="rv-msg">正在解密…</span></div><button class="rv-x" data-rvclose="1" aria-label="关闭">✕</button>`;document.body.appendChild(v);
+ rcGet(id).then(u=>{if(!v.isConnected){URL.revokeObjectURL(u);BLOBS.delete(u);return}v.dataset.u=u;$("#rv-stage").innerHTML=`<img id="rv-img" src="${u}" alt="收据" draggable="false">`;rvZoom(v)}).catch(e=>{if(e.message==="stale")return;const m=$("#rv-msg");if(m){m.textContent="收据无法读取";m.classList.add("err")}})}
+function rvClose(){const v=$("#rviewer");if(!v)return;const u=v.dataset.u;if(u){URL.revokeObjectURL(u);BLOBS.delete(u)}v.remove()}
+function rvZoom(v){const st=$("#rv-stage"),img=$("#rv-img");let s=1,x=0,y=0;const P=new Map();let d0=0,s0=1,last=null,tap=0;
+ const ap=()=>{s=Math.min(5,Math.max(1,s));if(s===1){x=0;y=0}img.style.transform=`translate(${x}px,${y}px) scale(${s})`;v.dataset.scale=s.toFixed(2)};
+ const dist=()=>{const [a,b]=[...P.values()];return Math.hypot(a.x-b.x,a.y-b.y)};
+ st.addEventListener("pointerdown",e=>{P.set(e.pointerId,{x:e.clientX,y:e.clientY});if(P.size===2){d0=dist();s0=s}last={x:e.clientX,y:e.clientY};
+  const t=Date.now();if(P.size===1&&t-tap<300){s=s>1?1:2.5;ap();tap=0}else tap=t});
+ st.addEventListener("pointermove",e=>{if(!P.has(e.pointerId))return;P.set(e.pointerId,{x:e.clientX,y:e.clientY});if(P.size===2&&d0){s=s0*dist()/d0;ap()}else if(P.size===1&&s>1&&last){x+=e.clientX-last.x;y+=e.clientY-last.y;ap()}last={x:e.clientX,y:e.clientY}});
+ const up=e=>{P.delete(e.pointerId);if(P.size<2)d0=0;last=null};["pointerup","pointercancel","pointerleave"].forEach(t=>st.addEventListener(t,up));
+ st.addEventListener("wheel",e=>{e.preventDefault();s*=e.deltaY<0?1.15:1/1.15;ap()},{passive:false});ap()}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-rview],[data-rvclose]");if(!b)return;e.stopPropagation();if(b.dataset.rvclose)return rvClose();const el=b.closest(".rc");if(el&&el.dataset.st==="ok")rcView(el.dataset.full)},true);
 // ---- 订阅 (read-only, data/subscriptions.json maintained by 记账管家)
 let SUBS;   // undefined = not loaded yet, null = missing/unreadable
 const subsToday=()=>window.__subsToday||today();
@@ -235,7 +257,7 @@ const segs2=()=>{try{const s=window.viewport&&window.viewport.segments;return !!
 const isWide=()=>WIDEQ.matches||segs2();let selId=null;
 function paneHTML(){const r=selId&&E.find(x=>x.id===selId);return r?entrySheet(r).replace('<div class="dim" data-eclose="1"></div>','').replace('class="sheet" id="entry"','class="pane-in" id="entry"'):`<div class="pane-empty" id="pane-empty">选择一笔账目查看详情</div>`}
 function layout(){const w=isWide()&&route()==="list"&&!document.body.classList.contains("locked");document.body.classList.toggle("two-pane",w);document.body.classList.toggle("segmented",w&&segs2());
- const p=$("#pane");if(!p)return;if(w){if($("#overlay #entry")){closeEntry()}p.innerHTML=paneHTML()}else{p.innerHTML="";if(selId&&route()==="list"&&!$("#overlay").innerHTML&&isWide()===false&&layout.was)openEntry(selId,true)}layout.was=w}
+ const p=$("#pane");if(!p)return;if(w){if($("#overlay #entry")){closeEntry()}const k=selId+"|"+sig;if(p.dataset.k!==k||!p.innerHTML){rcRevoke();p.innerHTML=paneHTML();p.dataset.k=k;rcLoad()}}else{if(p.innerHTML){rcRevoke();p.innerHTML=""}delete p.dataset.k;if(selId&&route()==="list"&&!$("#overlay").innerHTML&&isWide()===false&&layout.was)openEntry(selId,true)}layout.was=w}
 WIDEQ.addEventListener?WIDEQ.addEventListener("change",layout):WIDEQ.addListener(layout);window.addEventListener("resize",layout);
 try{window.viewport&&window.viewport.addEventListener&&window.viewport.addEventListener("segmentschange",layout)}catch{}
 // ---- router
@@ -257,7 +279,7 @@ document.addEventListener("click",e=>{const mb=e.target.closest("[data-more]");i
  else if(d.qclr!=null){e.preventDefault();st.q="";const q=$("#q");q.value="";listRes();q.focus()}
  else{if(d.open)sheet=true;if(d.close)sheet=false;if(d.clr){st[d.clr]="";if(d.clr==="day")st.month=""}if(d.pend)st.pend=!st.pend;if(d.type!=null)st.type=d.type;if(d.cat!=null)st.category=st.category===d.cat?"":d.cat;
   if(d.reset){Object.assign(st,{q:"",month:"",day:"",type:"",category:"",account:"",currency:"",pend:false});const q=$("#q");if(q)q.value=""}listRes()}});
-document.addEventListener("keydown",e=>{if(e.key==="Escape")closeEntry();if(e.key==="Enter"&&e.target.dataset&&e.target.dataset.id)openEntry(e.target.dataset.id)});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){if($("#rviewer"))return rvClose();closeEntry()}if(e.key==="Enter"&&e.target.dataset&&e.target.dataset.id)openEntry(e.target.dataset.id)});
 window.addEventListener("hashchange",go);
 // ---- encrypted data (AES-256-GCM, PBKDF2-SHA256). Only *.enc.json is published; the derived key is kept in memory,
 // or (「在这台设备上记住」) in IndexedDB as a NON-extractable CryptoKey. The password itself is never stored.
@@ -276,7 +298,7 @@ class Locked extends Error{}
 async function currentKey(){if(KEY)return KEY;const k=await keyLoad();if(k&&k.key)KEY=k;return KEY}
 async function openEnc(enc){const K=await currentKey();if(!K)throw new Locked("locked");
  try{return await decryptWith(K,enc)}catch(e){KEY=null;await keyClear();throw new Locked("key no longer works")}}   // e.g. password changed
-function wipe(){selId=null;{const p=$("#pane");if(p)p.innerHTML=""}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;lim.list=PAGE;Object.assign(st,{q:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
+function wipe(){rcRevoke();selId=null;{const p=$("#pane");if(p){p.innerHTML="";delete p.dataset.k}}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;lim.list=PAGE;Object.assign(st,{q:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
  ["#app","#overlay","#sheet"].forEach(q=>{const el=$(q);if(el)el.innerHTML=""});const t=$("#toast");if(t){t.textContent="";t.classList.remove("show")}
  const nb=$("#newbar");if(nb)nb.hidden=true;const c=$("#pcnt");if(c){c.hidden=true;c.textContent=""}document.body.style.overflow=""}
 async function lock(){KEY=null;wipe();await keyClear();showUnlock()}

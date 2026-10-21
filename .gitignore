@@ -17,3 +17,19 @@ test_b1.py
 test_b2.py
 test_b3.py
 test_b4a.py
+# receipts: only encrypted data/r/<id>.bin may be committed; never plaintext images or the local manifest
+data/r/*
+!data/r/*.bin
+*.jpg
+*.jpeg
+*.JPG
+*.JPEG
+*.heic
+*.HEIC
+*.webp
+*.gif
+data/**/*.png
+receipts/
+.receipts_manifest.json
+test_b4b.py
+mk_receipt_fixture.py
