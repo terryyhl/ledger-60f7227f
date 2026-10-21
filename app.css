@@ -6,7 +6,7 @@
 --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:20px;--s6:24px;--s8:32px;
 --r-card:12px;--r-sheet:16px;--r-ctl:9px;--r-badge:7px;--r-chip:16px;--r-btn:12px}
 @media(prefers-color-scheme:dark){:root{
---bg:#000000;--card:#1C1C1E;--card2:#2C2C2E;--ink:#FFFFFF;--sub:#8E8E93;--ter:#48484A;--sep:#2C2C2E;--fill:#2C2C2E;--grid:#2C2C2E;
+--bg:#000000;--card:#1C1C1E;--card2:#2C2C2E;--ink:#FFFFFF;--sub:#8E8E93;--ter:#6E6E73;--sep:#2C2C2E;--fill:#2C2C2E;--grid:#2C2C2E;
 --blue:#0A84FF;--red:#FF453A;--green:#30D158;--orange:#FF9F0A;--yellow:#FFD60A;--pink:#FF375F;--purple:#BF5AF2;--indigo:#5E5CE6;--teal:#64D2FF;--mint:#63E6E2;--brown:#AC8E68;
 --bar:rgba(0,0,0,.72);--tabbar:rgba(22,22,22,.86);--seg:#2C2C2E;--segon:#636366;--dim:rgba(0,0,0,.6)}}
 *{box-sizing:border-box;margin:0;padding:0}

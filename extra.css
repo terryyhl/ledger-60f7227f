@@ -140,3 +140,12 @@ body.two-pane #res .row.sel{background:color-mix(in srgb,var(--blue) 14%,var(--c
 button.tr-r{width:100%;border:0;background:none;font:inherit;color:inherit;text-align:left;padding:0;min-height:44px;grid-template-columns:10px 1fr auto 64px 12px;cursor:pointer}
 button.tr-r:active{background:var(--fill)}.tr-r .chev{color:var(--ter);font-weight:400}
 .tr-all{display:block;width:100%;min-height:44px;border:0;background:none;color:var(--blue);font:inherit;font-size:15px;text-align:center;margin-top:4px}
+/* B4-A: badge glyphs are text (≥4.5:1) in both modes: black on every palette colour (light 5.1–13.9, dark 5.8–14.9), white only on indigo (light 5.65 / dark 5.06). --ter (chevrons, disabled ›, grabber) raised to #6E6E73 (≥3:1 on #000/#1C1C1E). */
+.badge{color:#000}.badge[style*="--indigo"]{color:#fff}
+/* B4-A: ≤360px the heatmap card bleeds to the screen edges so 7 columns get ≥44px each; 2px tile gap is drawn with a transparent border so hit areas stay 44px */
+@media (max-width:360px){
+ #heat{margin-left:-16px;margin-right:-16px;border-radius:0;padding-left:2px;padding-right:2px}
+ #heat h2,#heat .hm-lg{padding-left:14px;padding-right:14px}
+ #heat .hm,#heat .hm-wd{gap:0}
+ #heat .hm-c{border:1px solid transparent;background-clip:padding-box;border-radius:9px}
+}
