@@ -413,9 +413,10 @@ const GR={STAGES:["种子","发芽","幼苗","小树","开花","结果"],ANCH:[[
 function grRatio(L){for(let i=0;i<GR.ANCH.length-1;i++){const [a,ra]=GR.ANCH[i],[b,rb]=GR.ANCH[i+1];if(a<=L&&L<=b){const t=(L-a)/(b-a);return ra===0?ra+(rb-ra)*t:ra*(rb/ra)**t}}}
 const grThresholds=M=>{const T=[0];for(let L=2;L<=30;L++)T.push(hu(M*grRatio(L)/1000)*1000);return T};
 // S-03: hist = complete calendar months before the target month (max 6; months without expenses skipped); <1 → default.
-// P2-S-01: no real amount in the public code — H (家政 per month) comes from the decrypted subscriptions' 家政 item, else 0.
-const grH=()=>{const it=SUBS&&Array.isArray(SUBS.items)?SUBS.items.find(x=>x&&(x.category==="家政"||/家政/.test((x.payee||"")+(x.note||"")))):null;if(!it)return 0;const a=+it.amount||0;return it.cycle==="yearly"?hu(a/12):a};
-function grBaseline(inc,hist,h=grH()){let m;if(hist&&hist.length>=1){const v=hist.slice(-6).map(([t,h])=>t-(inc?0:h)).sort((a,b)=>a-b),n=v.length;m=n%2?v[n>>1]:(v[n/2-1]+v[n/2])/2}else m=inc?GR.M_DEFAULT:GR.M_DEFAULT-h;return Math.max(GR.M_FLOOR,hu(m))}
+// H (家政 per month, used only when M falls back to the default): from the decrypted ledger — the 家政 total (same filters/FX/hu as monthEx) of the most
+// recent month m <= the target month that has 家政 spending > 0. The target month counts even while still in progress; months after it never count. None → 0.
+const grH=ym=>{const ms=[...new Set(E.map(r=>r.ym))].filter(m=>m&&m<=ym).sort().reverse();for(const m of ms){const h=monthEx(m)-monthEx(m,"家政");if(h>0)return h}return 0};
+function grBaseline(inc,hist,h=0){let m;if(hist&&hist.length>=1){const v=hist.slice(-6).map(([t,h])=>t-(inc?0:h)).sort((a,b)=>a-b),n=v.length;m=n%2?v[n>>1]:(v[n/2-1]+v[n/2])/2}else m=inc?GR.M_DEFAULT:GR.M_DEFAULT-h;return Math.max(GR.M_FLOOR,hu(m))}
 const grStage=L=>GR.LV.findIndex(([a,b])=>a<=L&&L<=b);
 function grCompute(total,M){const T=grThresholds(M);let L=1;T.forEach((t,i)=>{if(total>=t)L=Math.max(L,i+1)});const nxt=L<30?T[L]:null,p=nxt==null?1:(total-T[L-1])/(nxt-T[L-1]),s=total/M,cap=Math.min(s,1.5),st=grStage(L);
  return {M,total,level:L,stage:GR.STAGES[st],stage_idx:st+1,lv_floor:T[L-1],next_threshold:nxt,to_next:nxt==null?null:nxt-total,nutrient_pct:hu(p*100),height_cm:hu(5+295*Math.sqrt(cap/1.5)),
@@ -424,7 +425,7 @@ function grCompute(total,M){const T=grThresholds(M);let L=1;T.forEach((t,i)=>{if
 let SPHK=(()=>{try{return localStorage.getItem("ledger.sapling.hk")!=="0"}catch{return true}})();
 const hasData=ym=>E.some(r=>r.ym===ym&&r.type==="expense"&&jpyOf(r)!=null);
 function sapling(ym,hk=SPHK){if(!hasData(ym))return null;const hist=[];for(let i=6;i>=1;i--){const m=shiftYM(ym,-i);if(hasData(m)){const t=monthEx(m);hist.push([t,t-monthEx(m,"家政")])}}
- const total=hk?monthEx(ym):monthEx(ym,"家政"),M=grBaseline(hk,hist);return Object.assign(grCompute(total,M),{ym,hk,histN:hist.length,season:spSeason(ym)})}
+ const total=hk?monthEx(ym):monthEx(ym,"家政"),M=grBaseline(hk,hist,grH(ym));return Object.assign(grCompute(total,M),{ym,hk,histN:hist.length,season:spSeason(ym)})}
 const spSeason=ym=>{const m=+ym.slice(5);return m>=3&&m<=5?"spring":m<=8&&m>=6?"summer":m>=9&&m<=11?"autumn":"winter"};
 const SEASON_L={spring:"春",summer:"夏",autumn:"秋",winter:"冬"};
 const spKey=g=>`${g.stage_idx-1}-${g.season}`;
