@@ -19,7 +19,9 @@ function norm(r){const t=tokyo(r.datetime);const {attachment,...rest}=r;const rc
 // ---- b9 外币折算: per-entry fx {rate, date:"YYYY-MM-DD", src} filled by 记账管家 before encryption; JPY = round(amount × rate).
 // No rate (or an invalid one) → 未折算: excluded from JPY totals, counted in a note, never guessed. The page makes no external calls.
 function fxOk(f){if(!f||typeof f!=="object")return null;const rate=+f.rate;return isFinite(rate)&&rate>0&&/^\d{4}-\d{2}-\d{2}$/.test(f.date||"")&&typeof f.src==="string"&&f.src.trim()?{rate,date:f.date,src:f.src.trim().slice(0,40)}:null}
-const jpyOf=r=>r.currency===BASE?r.amount:r.fx?Math.round(r.amount*r.fx.rate):null;
+// ROUND_HALF_UP everywhere (B9-02): .5 rounds away from zero (Math.round alone rounds -2.5 to -2); same as Python Decimal ROUND_HALF_UP on the float
+const hu=x=>{const r=Math.round(Math.abs(x));return x<0&&r?-r:r};
+const jpyOf=r=>r.currency===BASE?r.amount:r.fx?hu(r.amount*r.fx.rate):null;
 const base=a=>a.filter(r=>jpyOf(r)!=null),sum=a=>a.reduce((s,r)=>s+("currency" in r?(jpyOf(r)??0):+r.amount||0),0);
 const exOf=a=>sum(base(a).filter(r=>r.type==="expense")),incOf=a=>sum(base(a).filter(r=>r.type==="income"));
 const groupBy=(a,k)=>a.reduce((o,r)=>((o[r[k]]=o[r[k]]||[]).push(r),o),{});
@@ -50,9 +52,9 @@ const scGet=k=>{try{const v=localStorage.getItem("ledger.scope."+k);return SC_L[
 let HS=scGet("home"),TS=scGet("trend");
 const inScope=(r,sc)=>sc==="all"||r.type!=="expense"||(sc==="fixed")===FIXED.has(r.category);
 const scSeg=(k,v)=>`<div class="seg sc-seg" id="${k}-scope" role="group" aria-label="固定/日常">${Object.entries(SC_L).map(([x,l])=>`<button data-sc="${k}" data-v="${x}" class="${v===x?"on":""}" aria-pressed="${v===x}">${l}</button>`).join("")}</div>`;
-function homeSummary(ym,m,ex,inc,dd){if(HS==="all")return `<div class="summary"><div class="lbl">${mlabel(ym)}支出</div><div class="big num" id="t-ex">${fmt(ex)}</div><div class="three"><div><small>收入</small><b class="num" id="t-inc" style="color:var(--green)">${fmt(inc)}</b></div><div><small>结余</small><b class="num" id="t-bal">${fmt(inc-ex)}</b></div><div><small>日均</small><b class="num">${fmt(Math.round(ex/dd))}</b></div></div></div>`;
+function homeSummary(ym,m,ex,inc,dd){if(HS==="all")return `<div class="summary"><div class="lbl">${mlabel(ym)}支出</div><div class="big num" id="t-ex">${fmt(ex)}</div><div class="three"><div><small>收入</small><b class="num" id="t-inc" style="color:var(--green)">${fmt(inc)}</b></div><div><small>结余</small><b class="num" id="t-bal">${fmt(inc-ex)}</b></div><div><small>日均</small><b class="num">${fmt(hu(ex/dd))}</b></div></div></div>`;
  const a=m.filter(r=>r.type==="expense"&&inScope(r,HS)),x=exOf(a);
- return `<div class="summary" data-scope="${HS}"><div class="lbl">${mlabel(ym)}${SC_L[HS]}支出</div><div class="big num" id="t-ex">${fmt(x)}</div><div class="three"><div><small>占总支出</small><b class="num" id="t-share">${ex?(x/ex*100).toFixed(1)+"%":"—"}</b></div><div><small>日均</small><b class="num">${fmt(Math.round(x/dd))}</b></div><div><small>笔数</small><b class="num" id="t-cnt">${base(a).length}</b></div></div></div>`}
+ return `<div class="summary" data-scope="${HS}"><div class="lbl">${mlabel(ym)}${SC_L[HS]}支出</div><div class="big num" id="t-ex">${fmt(x)}</div><div class="three"><div><small>占总支出</small><b class="num" id="t-share">${ex?(x/ex*100).toFixed(1)+"%":"—"}</b></div><div><small>日均</small><b class="num">${fmt(hu(x/dd))}</b></div><div><small>笔数</small><b class="num" id="t-cnt">${base(a).length}</b></div></div></div>`}
 function home(){const ym=rym,m=E.filter(r=>r.ym===ym),ex=monthEx(ym),inc=incOf(m),dd=ym===nowYM()?+today().slice(8):ym<nowYM()?new Date(+ym.slice(0,4),+ym.slice(5),0).getDate():1;
  return navbar(`${ym===nowYM()?"本月":mlabel(ym)}概览`)+`<div class="wrap">${period()}
  ${scSeg("home",HS)}
@@ -76,7 +78,7 @@ function budget(){const ym=rym,m=base(E.filter(r=>r.ym===ym&&r.type==="expense")
  const back=`<a class="nb" href="#/"><span class="chev" style="transform:rotate(-135deg) scale(.8);border-color:var(--blue)"></span>首页</a>`;
  if(!T&&!cats.length)return navbar(`${mlabel(ym)}预算`,back)+empty('<span class="ti-chart" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',"未设置预算","预算由记账管家在数据中设置。");
  const left=ym===nowYM()?new Date(+ym.slice(0,4),+ym.slice(5),0).getDate()-+today().slice(8)+1:1;
- return navbar(`${mlabel(ym)}预算`,back)+`<div class="wrap">${period()}${T?`<div class="summary" id="budget"><div class="lbl">总预算${ex>T?"超支":"剩余"}</div><div class="big num">${fmt(Math.abs(T-ex))}</div>${track(ex/T,8)}<div class="three" style="margin-top:12px"><div><small>已用 ${(ex/T*100).toFixed(1)}%</small><b class="num">${fmt(ex)}</b></div><div><small>预算</small><b class="num">${fmt(T)}</b></div><div><small>可日均</small><b class="num">${fmt(Math.max(0,Math.round((T-ex)/left)))}</b></div></div></div>`:""}
+ return navbar(`${mlabel(ym)}预算`,back)+`<div class="wrap">${period()}${T?`<div class="summary" id="budget"><div class="lbl">总预算${ex>T?"超支":"剩余"}</div><div class="big num">${fmt(Math.abs(T-ex))}</div>${track(ex/T,8)}<div class="three" style="margin-top:12px"><div><small>已用 ${(ex/T*100).toFixed(1)}%</small><b class="num">${fmt(ex)}</b></div><div><small>预算</small><b class="num">${fmt(T)}</b></div><div><small>可日均</small><b class="num">${fmt(Math.max(0,hu((T-ex)/left)))}</b></div></div></div>`:""}
  ${cats.length?`<div class="sh">分类预算</div><div class="group ic-rows">${cats.map(([c,v])=>{v=+v;const u=sum(m.filter(r=>r.category===c)),p=v?u/v:0;
  return `<div class="row bud" data-bcat="${esc(c)}" data-used="${u}" style="padding:12px 16px;gap:12px"><span class="badge" style="background:${colorOf(c)}">${esc(c.slice(0,1))}</span><div class="m" style="padding:0"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>${esc(c)}</span><span class="sub num" style="font-size:15px">${fmt(u)} / ${fmt(v)} · ${(p*100).toFixed(1)}%${u>v?` 超支 ${fmt(u-v)}`:""}</span></div>${track(p)}</div></div>`}).join("")}</div>`:""}
  <div class="sf">超出预算显示红色，达到 70% 显示橙色。预算由记账管家设置，只统计 ${BASE} 支出。</div></div>`}
@@ -86,7 +88,7 @@ const uniq=k=>[...new Set(E.map(r=>r[k]).filter(Boolean))].sort();
 function filtered(){const q=st.q.trim().toLowerCase();return sorted(E.filter(r=>(!st.payee||r.payee===st.payee)&&(!st.cv||jpyOf(r)!=null)&&(!st.dest||isRide(r)&&destKey(rideDest(r))===destKey(st.dest))&&(st.scope!=="store"||!STORE_SKIP.has(r.category))&&(!st.month||r.ym===st.month)&&(!st.day||r.d===st.day)&&(!st.type||r.type===st.type)&&(!st.category||r.category===st.category)&&(!st.account||r.account===st.account)&&(!st.currency||r.currency===st.currency)&&(!st.pend||isPend(r))
  &&qMatch(r,q)))}
 // search: space-separated tokens, all must match. A token matches the payee / note / category / account text, or the amount:
-// "2900" "¥2,900" "2,900円" = amount equals (text containing the digits also matches); ">5000" "<=1000" "1000-3000" = amount range.
+// "1234" "¥1,234" "1,234円" = amount equals (text containing the digits also matches); ">5000" "<=1000" "1000-3000" = amount range.
 const NUMQ=/^[¥￥]?\s*(\d[\d,]*(?:\.\d+)?)\s*(?:円|元)?$/,CMPQ=/^(>=|<=|>|<|＞|＜)\s*[¥￥]?\s*(\d[\d,]*(?:\.\d+)?)$/,RNGQ=/^[¥￥]?(\d[\d,]*(?:\.\d+)?)\s*[-~～]\s*[¥￥]?(\d[\d,]*(?:\.\d+)?)$/;
 const qNum=x=>+x.replace(/,/g,"");
 function qTok(r,t){let m;const txt=[r.payee,r.note,r.category,r.account].join(" ").toLowerCase();
@@ -132,7 +134,7 @@ function report(){const isM=rmode==="m",sel=isM?E.filter(r=>r.ym===rym):E.filter
  return a.length?`<div class="card" id="${id}"><h2>${t}<small>${BASE} 支出</small></h2>${a.map(([n,v])=>`<div class="rk" data-k="${esc(n)}" data-v="${v}" style="padding:8px 0"><div style="display:flex;justify-content:space-between;font-size:15px;margin-bottom:6px"><span>${esc(n||"—")}</span><span class="sub num">${fmt(v)}</span></div><div class="track"><i style="width:${(v/mx*100).toFixed(1)}%"></i></div></div>`).join("")}</div>`:""};
  return h+`<div class="summary"><div class="lbl">${isM?mlabel(rym):ryr+"年"}支出</div><div class="big num" id="r-ex">${fmt(ex)}</div>
  <div class="three" style="margin-bottom:12px;border-top:0;padding-top:0"><div><small>收入</small><b class="num" id="r-inc" style="color:var(--green)">${fmt(inc)}</b></div><div><small>结余</small><b class="num" id="r-bal">${fmt(inc-ex)}</b></div><div><small>笔数</small><b class="num">${sel.length}</b></div></div>
- <div class="delta">${isM?deltaBox("环比 上月",ex,exOf(prevA))+deltaBox(`同比 去年${mlabel(rym)}`,ex,exOf(yoyA)):deltaBox(`同比 ${+ryr-1}年`,ex,exOf(prevA))+`<div><small>月均</small><b class="num">${fmt(Math.round(ex/(ryr===nowYM().slice(0,4)?+nowYM().slice(5):12)))}</b></div>`}</div></div>${curNote(sel)}
+ <div class="delta">${isM?deltaBox("环比 上月",ex,exOf(prevA))+deltaBox(`同比 去年${mlabel(rym)}`,ex,exOf(yoyA)):deltaBox(`同比 ${+ryr-1}年`,ex,exOf(prevA))+`<div><small>月均</small><b class="num">${fmt(hu(ex/(ryr===nowYM().slice(0,4)?+nowYM().slice(5):12)))}</b></div>`}</div></div>${curNote(sel)}
  ${parts.length?`<div class="card"><h2>分类占比<small>点分类查看明细</small></h2><div class="ring">${donut(parts,ex)}<div style="flex:1;font-size:15px">${parts.map(p=>`<a class="row" href="#/list" data-drill="${esc(p.k)}" data-v="${p.v}" style="padding:0;gap:10px"><span class="badge" style="background:${p.c}">${esc(p.k.slice(0,1))}</span><span class="m">${esc(p.k)}</span><span class="sub num">${(p.v/ex*100).toFixed(1)}%</span><span class="chev"></span></a>`).join("")}</div></div></div>`:""}
  <div class="card"><h2>${isM?"每日支出":"每月支出"}<small>最高 ${fmt(Math.max(0,...vals))}</small></h2>${bars(vals,labels,hi)}</div>
  ${trendCard()}
@@ -192,7 +194,7 @@ function entrySheet(r){const s=r.type==="income"?"+":r.type==="transfer"?"":"-";
  return `<div class="dim" data-eclose="1"></div><div class="sheet" id="entry" role="dialog" aria-label="账目详情"><div class="grab"></div><div class="navbar"><span></span><span class="t">账目详情</span><button class="nb b" data-eclose="1">完成</button></div><div class="body" style="padding:0 16px 24px">
  <div style="text-align:center;padding:16px 0 4px"><div class="big num ${r.type==="income"?"in":""}" style="font-size:40px;font-weight:700" data-f="amount">${s}${fmt(r.amount,r.currency)}</div><div class="sub" style="font-size:15px;margin-top:4px">${esc(r.payee||"—")}${isPend(r)?'<span class="tag">待确认</span>':""}</div></div>
  ${r.rc?`<div class="rc" id="rc" data-th="${r.rc.thumb}" data-full="${r.rc.id}"><button class="rc-th" data-rview="1" aria-label="查看收据大图"><span class="rc-ph">正在解密收据…</span></button></div>`:r.hasAtt?`<div class="rc" id="rc"><div class="rc-th"><span class="rc-ph err">收据暂不可用</span></div></div>`:""}
- <div class="group" style="margin-top:16px">${f("时间",esc(r.d+" "+r.hm),"time")}${f("类型",TYPE[r.type],"type")}${f("分类",esc(r.category||"—"),"category")}${f("账户",esc(r.account||"—"),"account")}${f("商户",esc(r.payee||"—"),"payee")}${f("备注",esc(r.note||"—"),"note")}${f("来源",esc(SRC[r.source]||r.source||"—"),"source")}${f("币种",esc(r.currency),"currency")}${r.currency!==BASE?f("折算",r.fx?`${fmt(jpyOf(r))} <small class="sub">（汇率 ${r.fx.rate} · ${esc(r.fx.date)} · ${esc(r.fx.src)}）</small>`:'<span class="sub">未折算</span>',"fx"):""}${f("状态",isPend(r)?'<span class="tag" style="margin:0">待确认</span>':"已确认","pending")}${r.confidence!=null?f("识别置信度",Math.round(+r.confidence*100)+"%","confidence"):""}${f("收据",r.rc?"有（见下方）":r.hasAtt?"有（尚未上传）":"无","attachment")}${(()=>{try{const t=r.updated_at&&!isNaN(Date.parse(r.updated_at))?tokyo(r.updated_at):null;return t?f("更新于",esc(t.d+" "+t.hm),"updated"):""}catch{return ""}})()}${f("编号",'<span class="num" style="font-size:13px;color:var(--sub)">'+esc(r.id)+'</span>',"id")}</div>
+ <div class="group" style="margin-top:16px">${f("时间",esc(r.d+" "+r.hm),"time")}${f("类型",TYPE[r.type],"type")}${f("分类",esc(r.category||"—"),"category")}${f("账户",esc(r.account||"—"),"account")}${f("商户",esc(r.payee||"—"),"payee")}${f("备注",esc(r.note||"—"),"note")}${f("来源",esc(SRC[r.source]||r.source||"—"),"source")}${f("币种",esc(r.currency),"currency")}${r.currency!==BASE?f("折算",r.fx?`${fmt(jpyOf(r))} <small class="sub">（汇率 ${r.fx.rate} · ${esc(r.fx.date)} · ${esc(r.fx.src)}）</small>`:'<span class="sub">未折算</span>',"fx"):""}${f("状态",isPend(r)?'<span class="tag" style="margin:0">待确认</span>':"已确认","pending")}${r.confidence!=null?f("识别置信度",hu(+r.confidence*100)+"%","confidence"):""}${f("收据",r.rc?"有（见下方）":r.hasAtt?"有（尚未上传）":"无","attachment")}${(()=>{try{const t=r.updated_at&&!isNaN(Date.parse(r.updated_at))?tokyo(r.updated_at):null;return t?f("更新于",esc(t.d+" "+t.hm),"updated"):""}catch{return ""}})()}${f("编号",'<span class="num" style="font-size:13px;color:var(--sub)">'+esc(r.id)+'</span>',"id")}</div>
   ${isPend(r)?'<div class="readonly">这笔还没确认。需要改的话，告诉记账管家。</div>':""}</div></div>`}
 const openEntry=(id,force,vt)=>{const r=E.find(x=>x.id===id);if(!r)return;if(route()==="list")selId=id;if(!force&&isWide()&&route()==="list"){layout();document.querySelectorAll("#res .row.sel").forEach(x=>x.classList.remove("sel"));const rw=document.querySelector(`#res .row[data-id="${CSS.escape(id)}"]`);if(rw)rw.classList.add("sel");return}const was=!!$("#overlay").innerHTML;rcRevoke();$("#overlay").innerHTML=entrySheet(r);document.body.style.overflow="hidden";if(!vt&&!was)sheetIn($("#overlay"));rcLoad()};
 const closeEntry=()=>{const inPane=!!$("#pane #entry");rcRevoke();ghostOut($("#overlay"));$("#overlay").innerHTML="";document.body.style.overflow="";if(inPane||!isWide()){selId=null;document.querySelectorAll("#res .row.sel").forEach(x=>x.classList.remove("sel"))}if(inPane)layout()};
@@ -224,11 +226,11 @@ const dim=(y,m)=>new Date(Date.UTC(y,m,0)).getUTCDate();
 function nextCharge(it,t=subsToday()){const [y,m,d]=t.split("-").map(Number),day=Math.max(1,+it.day||1),mk=(Y,M)=>`${Y}-${pad(M)}-${pad(Math.min(day,dim(Y,M)))}`;
  if(it.cycle==="yearly"){const M=+it.month||1;let c=mk(y,M);return c<t?mk(y+1,M):c}
  let c=mk(y,m);if(c<t){const n=m===12?[y+1,1]:[y,m+1];c=mk(...n)}return c}
-const daysTo=(a,t=subsToday())=>Math.round((Date.parse(a+"T00:00:00Z")-Date.parse(t+"T00:00:00Z"))/864e5);
+const daysTo=(a,t=subsToday())=>hu((Date.parse(a+"T00:00:00Z")-Date.parse(t+"T00:00:00Z"))/864e5);
 function dueLabel(dt,t=subsToday()){const n=daysTo(dt,t);return n===0?"今天":n===1?"明天":n<=7?`${n} 天后`:(dt.slice(0,4)!==t.slice(0,4)?`${dt.slice(0,4)}年`:"")+`${+dt.slice(5,7)}月${+dt.slice(8)}日`}
 const subItems=()=>((SUBS&&Array.isArray(SUBS.items))?SUBS.items:[]).filter(it=>it&&(it.cycle==="monthly"||it.cycle==="yearly")&&+it.amount>0)
  .map((it,i)=>({...it,i,amount:+it.amount,next:nextCharge(it)})).sort((a,b)=>a.next.localeCompare(b.next)||b.amount-a.amount);
-function subTotals(a=subItems()){const mo=sum(a.filter(x=>x.cycle==="monthly")),yr=sum(a.filter(x=>x.cycle==="yearly"));return {mo,yr,eff:Math.round(mo+yr/12),annual:mo*12+yr}}
+function subTotals(a=subItems()){const mo=sum(a.filter(x=>x.cycle==="monthly")),yr=sum(a.filter(x=>x.cycle==="yearly"));return {mo,yr,eff:hu(mo+yr/12),annual:mo*12+yr}}
 const subsDue=()=>subItems().filter(x=>daysTo(x.next)<=7).length;
 // ---- 常去的店 (merchants.enc.json: {payee:{address,lat,lng,online}}; undefined = not loaded, null = missing/unreadable → no addresses)
 let MER;const MER_ON="ledger.merch.online";   // localStorage holds only "1"/"0" (include online merchants)
@@ -295,7 +297,7 @@ const FIXED=new Set(["家政","订阅"]);   // 固定支出 categories (b9)
 const INS={cat:{n:2,base:3000,pct:.15,abs:2000},tot:{n:5,base:10000,pct:.10,abs:5000},ride:{n:3}};
 function insights(ym){const isNow=ym===nowYM(),n=isNow?+today().slice(8):dimYM(ym),pm=shiftYM(ym,-1),pn=Math.min(n,dimYM(pm)),out=[];
  const per=(m,k)=>E.filter(r=>r.ym===m&&r.type==="expense"&&jy(r)!=null&&+r.d.slice(8)<=k);const A=per(ym,n),B=per(pm,pn);
- const S=a=>a.reduce((s,r)=>s+jy(r),0),pct=(c,p)=>(c>=p?"+":"-")+Math.round(Math.abs(c-p)/p*100)+"%";
+ const S=a=>a.reduce((s,r)=>s+jy(r),0),pct=(c,p)=>(c>=p?"+":"-")+hu(Math.abs(c-p)/p*100)+"%";
  const ca=groupBy(A,"category"),cb=groupBy(B,"category");
  for(const c of new Set([...Object.keys(ca),...Object.keys(cb)])){if(FIXED.has(c))continue;const a=ca[c]||[],b=cb[c]||[],x=S(a),y=S(b),d=x-y;
   if(a.length>=INS.cat.n&&b.length>=INS.cat.n&&y>=INS.cat.base&&Math.abs(d)>=INS.cat.abs&&Math.abs(d)/y>=INS.cat.pct)out.push({k:"cat",c,score:Math.abs(d),t:`${c}比上月同期 ${pct(x,y)}`,m:ym})}
@@ -316,13 +318,13 @@ function year(){const y=yearP(),mn=E.reduce((m,r)=>r.y<m?r.y:m,nowYM().slice(0,4
  const H=150,bw=16;let svg=`<svg class="yr-svg" viewBox="0 0 ${12*28} ${H+18}" width="100%" role="img" aria-label="${y}年每月支出">`;
  M.forEach((m,i)=>{const x=i*28+6,hf=m.f/mxv*H,hd=m.d/mxv*H;svg+=`<g class="yr-bar" data-ym="${m.ym}" data-t="${m.t}" data-f="${m.f}" data-d="${m.d}">`+(m.t?`<rect x="${x}" y="${(H-hf-hd).toFixed(1)}" width="${bw}" height="${hd.toFixed(1)}" rx="3" style="fill:var(--blue)"/><rect x="${x}" y="${(H-hf).toFixed(1)}" width="${bw}" height="${hf.toFixed(1)}" rx="3" style="fill:var(--ter)"/>`:`<rect x="${x}" y="${H-3}" width="${bw}" height="3" rx="1.5" style="fill:var(--fill)"/>`)+`<text x="${x+bw/2}" y="${H+14}" text-anchor="middle" class="tr-ax">${i+1}</text></g>`});
  svg+=`</svg>`;
- return navbar(`${y}年`,back)+`<div class="wrap">${sw}<div class="summary"><div class="lbl">${y}年支出 · JPY</div><div class="big num" id="yr-tot">${fmt(tot)}</div><div class="three"><div><small>日常</small><b class="num" id="yr-d">${fmt(tot-fx)}</b></div><div><small>固定</small><b class="num" id="yr-f">${fmt(fx)}</b></div><div><small>月均</small><b class="num">${fmt(Math.round(tot/(y===nowYM().slice(0,4)?+nowYM().slice(5):12)))}</b></div></div></div>
+ return navbar(`${y}年`,back)+`<div class="wrap">${sw}<div class="summary"><div class="lbl">${y}年支出 · JPY</div><div class="big num" id="yr-tot">${fmt(tot)}</div><div class="three"><div><small>日常</small><b class="num" id="yr-d">${fmt(tot-fx)}</b></div><div><small>固定</small><b class="num" id="yr-f">${fmt(fx)}</b></div><div><small>月均</small><b class="num">${fmt(hu(tot/(y===nowYM().slice(0,4)?+nowYM().slice(5):12)))}</b></div></div></div>
  <div class="card"><h2>每月支出<small><i class="yr-k" style="background:var(--blue)"></i>日常 <i class="yr-k" style="background:var(--ter)"></i>固定</small></h2>${svg}</div>
  <div class="sh">每月明细</div><div class="group" id="yr-months">${M.map(m=>`<button class="row yr-m" data-yjm="${m.ym}" data-t="${m.t}" aria-label="${mlabel(m.ym)} 报表"><span class="m">${mlabel(m.ym)}</span><span class="yr-split sub num">日常 ${fmt(m.d)} · 固定 ${fmt(m.f)}</span><span class="num">${fmt(m.t)}</span><span class="chev"></span></button>`).join("")}</div>
  <div class="card" id="yr-cats"><h2>分类占比<small>${y}年</small></h2>${cats.length?cats.map(([k,v])=>`<div class="rk" data-k="${esc(k)}" data-v="${v}" style="padding:8px 0"><div style="display:flex;justify-content:space-between;font-size:15px;margin-bottom:6px"><span>${esc(k)}${FIXED.has(k)?' <small class="sub">固定</small>':""}</span><span class="sub num">${fmt(v)} · ${(v/tot*100).toFixed(1)}%</span></div><div class="track"><i style="width:${(v/cats[0][1]*100).toFixed(1)}%;background:${colorOf(k)}"></i></div></div>`).join(""):'<div class="sub" style="font-size:15px;padding:8px 0">这一年没有 JPY 支出</div>'}</div></div>`}
 document.addEventListener("click",e=>{const b=e.target.closest("[data-yjm]");if(!b)return;rmode="m";rym=b.dataset.yjm;ryr=rym.slice(0,4);location.hash="#/report"});
 async function loadSubs(){try{const r=await fetch((TESTPLAIN?"data/subscriptions.json":ENC.subs)+"?t="+Date.now(),{cache:"no-store"});SUBS=r.ok?(TESTPLAIN?await r.json():await decryptWith(KEY,await r.json())):null}catch{SUBS=null}
- if(["home","subs"].includes(route())){const y=scrollY;render();scrollTo(0,y)}else subBadge()}
+ if(["home","subs","sapling","forest"].includes(route())){const y=scrollY;render();scrollTo(0,y)}else subBadge()}
 function subBadge(){const n=SUBS?subsDue():0,c=$("#pcnt");if(c){c.hidden=!n;c.textContent=n||""}}
 const subIcon=it=>`<span class="badge sub-ic" style="background:${colorOf("订阅")}">${esc((it.payee||"·").slice(0,1).toUpperCase())}</span>`;
 function homeSubs(){if(SUBS===undefined)return "";const a=subItems();if(!a.length)return "";const t=subTotals(a),n=a[0],soon=daysTo(n.next)<=7;
@@ -406,16 +408,18 @@ function unlockOut(){const u=$("#unlock");if(!u)return;const g=document.createEl
  const a=mv(g,[{opacity:1,transform:"none"},{opacity:0,transform:"scale(1.04)"}],{d:300,e:"cubic-bezier(.3,0,.2,1)"});if(!a)return g.remove();a.finished.then(()=>g.remove(),()=>g.remove())}
 // ---- b9s 树苗: growth numbers are an exact port of design/sapling/v2/growth/growth.py (parity: test_b9s), art from design/sapling/v3-line (sp/*.svg, generated by sp_gen.py).
 const monthEx=(ym,excl)=>exOf(E.filter(r=>r.ym===ym&&!(excl&&r.category===excl)));   // the month total (home summary uses the same function)
-const pyRound=x=>{const f=Math.floor(x),d=x-f;return d>.5?f+1:d<.5?f:(f%2?f+1:f)};   // Python round(): half to even
 const pyFloorDiv=(x,y)=>{let m=x%y,div=(x-m)/y;if(m){if((y<0)!==(m<0))div-=1}if(!div)return 0;let f=Math.floor(div);if(div-f>.5)f+=1;return f};   // CPython float //
-const GR={STAGES:["种子","发芽","幼苗","小树","开花","结果"],ANCH:[[1,0],[3,.025],[7,.125],[13,.375],[19,.75],[25,1.125],[30,1.5]],LV:[[1,2],[3,6],[7,12],[13,18],[19,24],[25,30]],M_DEFAULT:400000,H_DEFAULT:260000,M_FLOOR:50000};
+const GR={STAGES:["种子","发芽","幼苗","小树","开花","结果"],ANCH:[[1,0],[3,.025],[7,.125],[13,.375],[19,.75],[25,1.125],[30,1.5]],LV:[[1,2],[3,6],[7,12],[13,18],[19,24],[25,30]],M_DEFAULT:400000,M_FLOOR:50000};
 function grRatio(L){for(let i=0;i<GR.ANCH.length-1;i++){const [a,ra]=GR.ANCH[i],[b,rb]=GR.ANCH[i+1];if(a<=L&&L<=b){const t=(L-a)/(b-a);return ra===0?ra+(rb-ra)*t:ra*(rb/ra)**t}}}
-const grThresholds=M=>{const T=[0];for(let L=2;L<=30;L++)T.push(pyRound(M*grRatio(L)/1000)*1000);return T};
-function grBaseline(inc,hist){let m;if(hist&&hist.length>=3){const v=hist.slice(-6).map(([t,h])=>t-(inc?0:h)).sort((a,b)=>a-b),n=v.length;m=n%2?v[n>>1]:(v[n/2-1]+v[n/2])/2}else m=inc?GR.M_DEFAULT:GR.M_DEFAULT-GR.H_DEFAULT;return Math.max(GR.M_FLOOR,pyRound(m))}
+const grThresholds=M=>{const T=[0];for(let L=2;L<=30;L++)T.push(hu(M*grRatio(L)/1000)*1000);return T};
+// S-03: hist = complete calendar months before the target month (max 6; months without expenses skipped); <1 → default.
+// P2-S-01: no real amount in the public code — H (家政 per month) comes from the decrypted subscriptions' 家政 item, else 0.
+const grH=()=>{const it=SUBS&&Array.isArray(SUBS.items)?SUBS.items.find(x=>x&&(x.category==="家政"||/家政/.test((x.payee||"")+(x.note||"")))):null;if(!it)return 0;const a=+it.amount||0;return it.cycle==="yearly"?hu(a/12):a};
+function grBaseline(inc,hist,h=grH()){let m;if(hist&&hist.length>=1){const v=hist.slice(-6).map(([t,h])=>t-(inc?0:h)).sort((a,b)=>a-b),n=v.length;m=n%2?v[n>>1]:(v[n/2-1]+v[n/2])/2}else m=inc?GR.M_DEFAULT:GR.M_DEFAULT-h;return Math.max(GR.M_FLOOR,hu(m))}
 const grStage=L=>GR.LV.findIndex(([a,b])=>a<=L&&L<=b);
 function grCompute(total,M){const T=grThresholds(M);let L=1;T.forEach((t,i)=>{if(total>=t)L=Math.max(L,i+1)});const nxt=L<30?T[L]:null,p=nxt==null?1:(total-T[L-1])/(nxt-T[L-1]),s=total/M,cap=Math.min(s,1.5),st=grStage(L);
- return {M,total,level:L,stage:GR.STAGES[st],stage_idx:st+1,lv_floor:T[L-1],next_threshold:nxt,to_next:nxt==null?null:nxt-total,nutrient_pct:pyRound(p*100),height_cm:pyRound(5+295*Math.sqrt(cap/1.5)),
-  leaves:st===0?0:pyRound(160*cap),flowers:s>=.75?Math.min(15,Math.max(0,pyFloorDiv(total-.75*M,.025*M))):0,fruits:s>=1.125?Math.min(15,Math.max(0,pyFloorDiv(total-1.125*M,.025*M))):0,overflow:Math.max(0,pyFloorDiv(total-1.5*M,.1*M))}}
+ return {M,total,level:L,stage:GR.STAGES[st],stage_idx:st+1,lv_floor:T[L-1],next_threshold:nxt,to_next:nxt==null?null:nxt-total,nutrient_pct:hu(p*100),height_cm:hu(5+295*Math.sqrt(cap/1.5)),
+  leaves:st===0?0:hu(160*cap),flowers:s>=.75?Math.min(15,Math.max(0,pyFloorDiv(total-.75*M,.025*M))):0,fruits:s>=1.125?Math.min(15,Math.max(0,pyFloorDiv(total-1.125*M,.025*M))):0,overflow:Math.max(0,pyFloorDiv(total-1.5*M,.1*M))}}
 // app side: hk = 「家政计入养料」 (default ON). Per GROWTH.md it only concerns 家政; 订阅 always counts.
 let SPHK=(()=>{try{return localStorage.getItem("ledger.sapling.hk")!=="0"}catch{return true}})();
 const hasData=ym=>E.some(r=>r.ym===ym&&r.type==="expense"&&jpyOf(r)!=null);
@@ -465,7 +469,7 @@ function saplingP(){const ym=spMP(),[lo,hi]=spRange(),g=sapling(ym),alt=g&&sapli
  <div class="card sp-hero"><div class="sp-big">${spSvg(g,{live:1,s:240})}</div><div class="sp-lv"><b id="sp-lv">Lv.${g.level}</b> <span class="sub">${g.stage} · ${SEASON_L[g.season]}</span></div>${track(g.nutrient_pct/100,8)}
  <div class="sub num sp-nx" id="sp-nx">${g.to_next!=null?`再 ${fmt(g.to_next)} 升到 Lv.${g.level+1}`:"已满级"}</div></div>
  <div class="summary"><div class="lbl">本月养料${SPHK?"":"（不含家政）"}</div><div class="big num" id="sp-total">${fmt(g.total)}</div><div class="three"><div><small>基准 M</small><b class="num" id="sp-m">${fmt(g.M)}</b></div><div><small>占 M</small><b class="num">${(g.total/g.M*100).toFixed(0)}%</b></div><div><small>${SPHK?"不含家政":"含家政"}</small><b class="num" id="sp-alt">Lv.${alt.level}</b></div></div></div>
- <p class="foot sub" id="sp-mnote">M = ${g.histN>=3?`前 ${g.histN} 个有记录的完整月（最多 6 个）支出中位数`:`默认值（完整月不足 3 个）`}，最低 ¥50,000。</p>
+ <p class="foot sub" id="sp-mnote">M = ${g.histN>=1?`本月之前最近 6 个完整月中有记录的 ${g.histN} 个月的支出中位数`:`默认值 ¥400,000${SPHK?"":"（减订阅中的家政月额）"}（还没有完整月）`}，最低 ¥50,000。</p>
  <div class="card"><div class="sp-at">${at.map(([k,v])=>`<div><small class="sub">${k}</small><b class="num">${v}</b></div>`).join("")}</div></div>${tog}${forest}</div>`}
 const spYP=()=>{const m=/[?&]y=(\d{4})/.exec(location.hash);return m?m[1]:rym.slice(0,4)};
 function forest(){const y=spYP(),[lo,hi]=spRange(),ylo=lo.slice(0,4),yhi=hi.slice(0,4);
@@ -544,7 +548,7 @@ let toastT;function toast(t){const el=$("#toast");el.textContent=t;el.classList.
 const NUMS=["t-ex","t-inc","t-bal","r-ex","r-inc","r-bal"];
 function animateNums(before){if(RM.matches)return;const els=NUMS.map(id=>document.getElementById(id)).filter(el=>el&&before[el.id]!=null);
  const to=els.map(el=>parseFloat(el.textContent.replace(/[^\d.\-]/g,""))||0),from=els.map(el=>before[el.id]);if(!els.length||to.every((v,i)=>v===from[i]))return;
- const t0=performance.now();document.body.dataset.anim="1";const step=t=>{const k=Math.min(1,(t-t0)/360),e=1-Math.pow(1-k,3);els.forEach((el,i)=>el.textContent=fmt(Math.round(from[i]+(to[i]-from[i])*e)));if(k<1)requestAnimationFrame(step);else delete document.body.dataset.anim};requestAnimationFrame(step)}
+ const t0=performance.now();document.body.dataset.anim="1";const step=t=>{const k=Math.min(1,(t-t0)/360),e=1-Math.pow(1-k,3);els.forEach((el,i)=>el.textContent=fmt(hu(from[i]+(to[i]-from[i])*e)));if(k<1)requestAnimationFrame(step);else delete document.body.dataset.anim};requestAnimationFrame(step)}
 function numsBefore(){const before={};NUMS.forEach(id=>{const el=document.getElementById(id);if(el)before[id]=parseFloat(el.textContent.replace(/[^\d.\-]/g,""))||0});return before}
 function rerender(){const before=numsBefore();const y=scrollY;render();scrollTo(0,y);animateNums(before)}
 function setBusy(v){busy=v;document.querySelectorAll(".rbtn").forEach(b=>b.classList.toggle("spin",v));$("#ptr").classList.toggle("spin",v)}
