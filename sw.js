@@ -1,4 +1,4 @@
-const V="ledger-v25",RC="ledger-receipts-v1",SHELL=["./","index.html","app.css","extra.css","app.js","manifest.webmanifest","icons/icon-192.png","icons/icon-512.png","icons/maskable-512.png","icons/apple-touch-icon.png","icons/favicon-32.png","icons/icon.svg"];
+const V="ledger-v26",RC="ledger-receipts-v1",SHELL=["./","index.html","app.css","extra.css","sp/sapling.css","app.js","manifest.webmanifest","icons/icon-192.png","icons/icon-512.png","icons/maskable-512.png","icons/apple-touch-icon.png","icons/favicon-32.png","icons/icon.svg"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL.map(u=>new Request(u,{cache:"reload"})))).then(()=>self.skipWaiting()))});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V&&k!==RC).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener("fetch",e=>{const u=new URL(e.request.url);if(e.request.method!=="GET"||u.origin!==location.origin)return;
@@ -10,4 +10,6 @@ self.addEventListener("fetch",e=>{const u=new URL(e.request.url);if(e.request.me
   e.respondWith(fetch(e.request,{cache:"no-store"}).then(r=>{if(r.ok){const c=r.clone();caches.open(V).then(k=>k.put(key,c));return r}
    if(r.status>=500)return fromCache("5xx").then(c=>c||r);return r})
    .catch(()=>fromCache("1").then(c=>{if(!c)throw new Error("offline");return c})));return}
+ // b9s sapling art (sp/<stage>-<season>.svg, up to ~590 KB each): not precached; cache-first into this version's cache on first use
+ if(/\/sp\/\d-(spring|summer|autumn|winter)\.svg$/.test(u.pathname)){e.respondWith(caches.open(V).then(c=>c.match(u.pathname).then(hit=>hit||fetch(e.request).then(r=>{if(r.ok)c.put(u.pathname,r.clone());return r}))));return}
  e.respondWith(caches.match(e.request,{ignoreSearch:true}).then(r=>r||fetch(e.request)))});

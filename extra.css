@@ -241,3 +241,19 @@ button.row.yr-m{width:100%;border:0;background:var(--card);font:inherit;color:va
 .yr-sw b{font-size:17px}
 .pbtn[aria-disabled="true"]{color:var(--dis);pointer-events:none}
 @media (prefers-reduced-motion:no-preference){button.yr-m{transition:transform .2s var(--spr)}button.yr-m:active{transform:scale(.98)}}
+/* b9s 树苗 */
+a.card.sap{display:flex;align-items:center;gap:14px;text-decoration:none;color:inherit;min-height:44px;padding:12px 16px}
+.sap-art{flex:0 0 76px;width:76px;height:76px;display:block}.sap-art svg{display:block}
+.sap-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.sap-h{display:flex;justify-content:space-between;align-items:baseline;font-size:17px}.sap-h .sub{font-size:15px}
+.sap-n{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sap-plus{font-style:normal;color:var(--green)}
+.sp-hero{display:flex;flex-direction:column;align-items:stretch;gap:10px}
+.sp-big{display:flex;justify-content:center}.sp-big svg{width:min(240px,70vw);height:auto}
+.sp-lv{text-align:center;font-size:17px}.sp-lv b{font-size:22px}.sp-nx{text-align:center;font-size:13px}
+.sp-at{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.sp-at>div{display:flex;flex-direction:column;gap:2px}.sp-at small{font-size:12px}.sp-at b{font-size:17px;font-weight:600}
+button.row.sp-row{width:100%;border:0;background:none;font:inherit;color:inherit;text-align:left;min-height:44px;cursor:pointer;justify-content:space-between}
+.foot{font-size:13px;margin:8px 16px 0;line-height:1.4}
+.fo-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px;margin-top:16px}
+.fo-c{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:14px;background:var(--card);color:inherit;text-decoration:none;min-width:84px;min-height:84px;font-size:13px}
+.fo-c svg{width:84px;height:84px;display:block}.fo-e{opacity:.6}
+.fo-dot{width:84px;height:84px;display:grid;place-items:center}.fo-dot::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--fill)}
