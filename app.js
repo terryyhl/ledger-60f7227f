@@ -216,6 +216,10 @@ async function rcLoad(){document.querySelectorAll("#entry .rc[data-th]:not([data
 function rcView(id){const old=$("#rviewer");if(old)old.remove();const v=document.createElement("div");v.id="rviewer";v.setAttribute("role","dialog");v.setAttribute("aria-label","收据");
  v.innerHTML=`<div class="rv-stage" id="rv-stage"><span class="rc-ph" id="rv-msg">正在解密…</span></div><button class="rv-x" data-rvclose="1" aria-label="关闭">✕</button>`;document.body.appendChild(v);
  rcGet(id).then(u=>{if(!v.isConnected){URL.revokeObjectURL(u);BLOBS.delete(u);return}v.dataset.u=u;$("#rv-stage").innerHTML=`<img id="rv-img" src="${u}" alt="收据" draggable="false">`;rvZoom(v)}).catch(e=>{if(e.message==="stale")return;const m=$("#rv-msg");if(m){m.textContent="收据无法读取";m.classList.add("err")}})}
+// b10 native feel: page zoom off (Safari ignores user-scalable=no, so cancel its gesture* events); the receipt viewer zooms itself via pointer events (rvZoom).
+["gesturestart","gesturechange","gestureend"].forEach(t=>document.addEventListener(t,e=>e.preventDefault(),{passive:false}));
+const noDrag=root=>{if(root.matches&&root.matches("a,img"))root.draggable=false;if(root.querySelectorAll)root.querySelectorAll("a:not([draggable=false]),img:not([draggable=false])").forEach(e=>e.draggable=false)};
+noDrag(document.documentElement);new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>n.nodeType===1&&noDrag(n)))).observe(document.documentElement,{childList:true,subtree:true});
 function rvClose(){const v=$("#rviewer");if(!v)return;const u=v.dataset.u;if(u){URL.revokeObjectURL(u);BLOBS.delete(u)}v.remove()}
 function rvZoom(v){const st=$("#rv-stage"),img=$("#rv-img");let s=1,x=0,y=0;const P=new Map();let d0=0,s0=1,last=null,tap=0;
  const ap=()=>{s=Math.min(5,Math.max(1,s));if(s===1){x=0;y=0}img.style.transform=`translate(${x}px,${y}px) scale(${s})`;v.dataset.scale=s.toFixed(2)};

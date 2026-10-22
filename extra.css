@@ -269,3 +269,8 @@ a.card.rev-line{display:flex;align-items:center;gap:10px;min-height:44px;padding
 .rev-k{font-weight:600;flex:0 0 auto}.rev-s{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
 .rev-sw{display:flex;align-items:center;justify-content:space-between}.rev-sw .pbtn{font-size:24px;min-width:44px;min-height:44px;background:none;border:0;color:var(--blue)}.rev-sw .pbtn:disabled{color:var(--dis)}
 .rev-sum{font-size:17px;line-height:1.5;margin:8px 0}.rev-ul{margin:0 0 12px 20px;font-size:15px;line-height:1.6}.rev-st{margin:8px 0}
+/* b10 native feel: no long-press callout / selection / drag on links, images, buttons; text entry and note text stay selectable.
+   touch-action:manipulation kills double-tap zoom (pan + PTR + horizontal swipes unaffected); the receipt viewer stage keeps touch-action:none and its own zoom. */
+html{touch-action:manipulation}
+a,img,button,[role="button"],svg{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
+input,textarea,[contenteditable],[contenteditable] *,[data-f="note"]{-webkit-touch-callout:default;-webkit-user-select:text;user-select:text}
