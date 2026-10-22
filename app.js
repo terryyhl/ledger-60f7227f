@@ -51,24 +51,20 @@ const SC_L={all:"全部",daily:"日常",fixed:"固定"};
 const scGet=k=>{try{const v=localStorage.getItem("ledger.scope."+k);return SC_L[v]?v:"all"}catch{return "all"}};
 let HS=scGet("home"),TS=scGet("trend");
 const inScope=(r,sc)=>sc==="all"||r.type!=="expense"||(sc==="fixed")===FIXED.has(r.category);
-const scSeg=(k,v)=>`<div class="seg sc-seg" id="${k}-scope" role="group" aria-label="固定/日常">${Object.entries(SC_L).map(([x,l])=>`<button data-sc="${k}" data-v="${x}" class="${v===x?"on":""}" aria-pressed="${v===x}">${l}</button>`).join("")}</div>`;
+const scSeg=(k,v)=>`<div class="seg sc-seg" id="${k}-scope" role="group" aria-label="固定/日常">${Object.entries(k==="home"?{...SC_L,all:"总计"}:SC_L).map(([x,l])=>`<button data-sc="${k}" data-v="${x}" class="${v===x?"on":""}" aria-pressed="${v===x}">${l}</button>`).join("")}</div>`;
 function homeSummary(ym,m,ex,inc,dd){if(HS==="all")return `<div class="summary"><div class="lbl">${mlabel(ym)}支出</div><div class="big num" id="t-ex">${fmt(ex)}</div><div class="three"><div><small>收入</small><b class="num" id="t-inc" style="color:var(--green)">${fmt(inc)}</b></div><div><small>结余</small><b class="num" id="t-bal">${fmt(inc-ex)}</b></div><div><small>日均</small><b class="num">${fmt(hu(ex/dd))}</b></div></div></div>`;
  const a=m.filter(r=>r.type==="expense"&&inScope(r,HS)),x=exOf(a);
  return `<div class="summary" data-scope="${HS}"><div class="lbl">${mlabel(ym)}${SC_L[HS]}支出</div><div class="big num" id="t-ex">${fmt(x)}</div><div class="three"><div><small>占总支出</small><b class="num" id="t-share">${ex?(x/ex*100).toFixed(1)+"%":"—"}</b></div><div><small>日均</small><b class="num">${fmt(hu(x/dd))}</b></div><div><small>笔数</small><b class="num" id="t-cnt">${base(a).length}</b></div></div></div>`}
 function home(){const ym=rym,m=E.filter(r=>r.ym===ym),ex=monthEx(ym),inc=incOf(m),dd=ym===nowYM()?+today().slice(8):ym<nowYM()?new Date(+ym.slice(0,4),+ym.slice(5),0).getDate():1;
+ // b10: home = month overview (总计/日常/固定) · budget (only when configured) · insights · sapling · latest 5
  return navbar(`${ym===nowYM()?"本月":mlabel(ym)}概览`)+`<div class="wrap">${period()}
  ${scSeg("home",HS)}
  ${homeSummary(ym,m,ex,inc,dd)}${curNote(m)}
- ${mtd(ym)}
+ ${homeBudget(ym,ex)}
  ${insightsCard(ym)}
  ${saplingCard(ym)}
- ${homeSubs()}
- ${heatmap(ym)}
- ${storesCard(ym)}
- ${ridesCard(ym)}
- ${homeBudget(ym,ex)}
- <div class="sh" style="display:flex;justify-content:space-between"><span>最近 10 笔</span><a class="link" href="#/list" style="text-transform:none;text-decoration:none">全部</a></div>
- ${E.length?`<div class="group ic-rows" id="recent">${sorted(E).slice(0,10).map(txRow).join("")}</div>`:empty('<span class="ti-list" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',"还没有记录","记账管家入账并发布后，记录会显示在这里。")}</div>`}
+ <div class="sh" style="display:flex;justify-content:space-between"><span>最近 5 笔</span><a class="link" href="#/list" style="text-transform:none;text-decoration:none">全部</a></div>
+ ${E.length?`<div class="group ic-rows" id="recent">${sorted(E).slice(0,5).map(txRow).join("")}</div>`:empty('<span class="ti-list" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',"还没有记录","记账管家入账并发布后，记录会显示在这里。")}</div>`}
 const total=()=>BUD&&BUD.monthly?+(BUD.monthly[BASE]||0):0;
 function homeBudget(ym,ex){const T=total();if(!T)return "";const left=ym===nowYM()?new Date(+ym.slice(0,4),+ym.slice(5),0).getDate()-+today().slice(8):0;
  return `<div class="sh">预算</div><div class="group" id="budget"><div class="row" style="flex-direction:column;align-items:stretch;padding:12px 16px;gap:8px"><div style="display:flex;justify-content:space-between"><span>本月预算</span><span class="sub num">${fmt(ex)} / ${fmt(T)}</span></div>${track(ex/T)}<div class="n sub" style="font-size:13px">${ex>T?`超支 ${fmt(ex-T)}`:`剩余 ${fmt(T-ex)}`} · 还有 ${left} 天 · 已用 ${(ex/T*100).toFixed(1)}%</div></div><a class="row" href="#/budget"><span class="m p">查看分类预算</span><span class="chev"></span></a></div>`}
@@ -100,9 +96,18 @@ const qMatch=(r,q)=>!q||q.split(/\s+/).filter(Boolean).every(t=>qTok(r,t));
 const anyF=()=>st.q||st.payee||st.dest||st.cv||st.day||st.month||st.type||st.category||st.account||st.currency||st.pend;
 function chip(k,label,val){return val?`<button class="chip on" data-clr="${k}">${esc(val)} <span class="x">✕</span></button>`:`<button class="chip dd" data-open="1">${label}</button>`}
 function list(){return navbar("明细","",`<div class="search-hit"><label class="search"><span class="mag"></span><input id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="搜索商户、备注、金额或分类" value="${esc(st.q)}"><button class="qclr" data-qclr="1" aria-label="清除搜索"${st.q?"":" hidden"}>✕</button></label></div>
- <div class="chips" id="chips"></div>`)+`<div id="res"></div>`}
+ <div class="chips" id="chips"></div><div class="lv-hit"><div class="seg lv-seg" id="lv-seg" role="group" aria-label="视图">${[["list","列表"],["cal","日历"]].map(([v,l])=>`<button data-lv="${v}" class="${LVIEW===v?"on":""}" aria-pressed="${LVIEW===v}">${l}</button>`).join("")}</div></div>`)+`<div id="res"></div>`}
+// b10 明细 view: 列表 (paged) or 日历 (the former home heatmap, built from the CURRENT search+filters; one month, ‹ › inside).
+// Kept for the session (not persisted): any jump into 明细 (chart, store, ride, insight, day) always lands on 列表.
+let LVIEW="list",CALM=null;
+const lvSync=()=>document.querySelectorAll("#lv-seg button").forEach(b=>{b.classList.toggle("on",b.dataset.lv===LVIEW);b.setAttribute("aria-pressed",b.dataset.lv===LVIEW)});
+const calYM=()=>CALM||(st.day?st.day.slice(0,7):st.month)||rym;
 function chipsHTML(){return (st.cv?`<button class="chip on" data-clr="cv" id="chip-cv">${BASE}（含折算） <span class="x">✕</span></button>`:"")+(st.dest?`<button class="chip on" data-clr="dest" id="chip-dest">打车去 ${esc(st.dest)} <span class="x">✕</span></button>`:"")+(st.payee?`<button class="chip on" data-clr="payee" id="chip-payee">${esc(st.payee)}${st.scope==="store"?" · 不含家政/买菜/订阅":""} <span class="x">✕</span></button>`:"")+(st.day?`<button class="chip on" data-clr="day" id="chip-day">${esc(dlabel(st.day))} <span class="x">✕</span></button>`:chip("month","月份",st.month&&mlabel(st.month)))+chip("type","类型",TYPE[st.type])+chip("category","分类",st.category)+chip("account","账户",st.account)+chip("currency","币种",st.currency)+`<button class="chip ${st.pend?"on":""}" data-pend="1">待确认</button>`}
-function listRes(keep){if(keep==="h")pg=hashP();else if(!keep)pg=1;$("#chips").innerHTML=chipsHTML();const qc=$(".qclr");if(qc)qc.hidden=!st.q;const a=filtered(),np=Math.max(1,Math.ceil(a.length/PER));pg=Math.min(Math.max(1,pg),np);
+function listRes(keep){if(keep==="h")pg=hashP();else if(!keep)pg=1;$("#chips").innerHTML=chipsHTML();const qc=$(".qclr");if(qc)qc.hidden=!st.q;const a=filtered();
+ if(LVIEW==="cal"){const ym=calYM(),lo=E.length?E.reduce((m,r)=>r.ym<m?r.ym:m,nowYM()):nowYM(),hi=mxYM();if(location.hash!=="#/list")history.replaceState(history.state,"","#/list");
+  $("#res").innerHTML=`<div class="wrap"><div class="sf" style="padding-top:4px"><span id="cnt">${a.length}</span> 笔 · 支出 ${fmt(exOf(a))} · 收入 ${fmt(incOf(a))}</div>${curNote(a)}<div class="period cal-sw"><button class="nb pbtn" data-calm="-1" aria-label="上个月"${ym>lo?"":" disabled"}>‹</button><b id="cal-t">${mlabel(ym)}</b><button class="nb pbtn" data-calm="1" aria-label="下个月"${ym<hi?"":" disabled"}>›</button></div>${heatmap(ym,a.filter(r=>r.ym===ym))}</div>`;
+  const sh=$("#sheet"),was=!!sh.innerHTML;if(was&&!sheet)ghostOut(sh);sh.innerHTML=sheet?sheetHTML():"";if(!was&&sheet)sheetIn(sh);return}
+ const np=Math.max(1,Math.ceil(a.length/PER));pg=Math.min(Math.max(1,pg),np);
  {const want=pg>1?"#/list?p="+pg:"#/list";if(route()==="list"&&location.hash!==want)history.replaceState(history.state,"",want)}
  $("#res").innerHTML=`<div class="wrap"><div class="sf" style="padding-top:4px"><span id="cnt">${a.length}</span> 笔 · 支出 ${fmt(exOf(a))} · 收入 ${fmt(incOf(a))}</div>${curNote(a)}${a.length?days(a,g=>"支出 "+fmt(exOf(g)),pg*PER,(pg-1)*PER)+pager(pg,np):E.length?
  empty('<span class="mag" style="transform:scale(2)"></span>',"没有找到结果",`没有符合${st.q?`“${esc(st.q)}”和`:""}当前筛选的记录。`,'<button class="btn sec" data-reset="1">清除筛选</button>'):
@@ -125,7 +130,7 @@ function report(){const isM=rmode==="m",sel=isM?E.filter(r=>r.ym===rym):E.filter
 
  let h=navbar("报表","",`<div style="padding:0 16px"><div class="seg-hit"><div class="seg"><button data-m="m" class="${isM?"on":""}">月</button><button data-m="y" class="${isM?"":"on"}">年</button></div></div></div>`)+
  `<div class="wrap">${period()}`;
- if(!sel.length)return h+`</div>`+empty('<span class="ti-chart" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',isM?"本月暂无数据":"本年暂无数据","有记录后会在这里显示分类占比和趋势。")+`<div class="wrap">${trendCard()}</div>`;
+ if(!sel.length)return h+`</div>`+empty('<span class="ti-chart" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',isM?"本月暂无数据":"本年暂无数据","有记录后会在这里显示分类占比和趋势。")+`<div class="wrap">${trendCard()}${isM?`<div class="sh" id="where">去哪儿</div>${storesCard(rym)}${ridesCard(rym)}`:""}</div>`;
  const prevA=isM?E.filter(r=>r.ym===shiftYM(rym,-1)):E.filter(r=>r.y===String(+ryr-1));const yoyA=isM?E.filter(r=>r.ym===(+rym.slice(0,4)-1)+rym.slice(4)):null;
  const g=groupBy(exr,"category"),parts=Object.entries(g).map(([k,a])=>({k,v:sum(a),c:colorOf(k)})).sort((a,b)=>b.v-a.v);
  let vals,labels,hi;if(isM){const n=new Date(+rym.slice(0,4),+rym.slice(5),0).getDate();vals=[...Array(n)].map((_,i)=>sum(exr.filter(r=>+r.d.slice(8)===i+1)));labels=[1,8,15,22,n]}
@@ -136,8 +141,9 @@ function report(){const isM=rmode==="m",sel=isM?E.filter(r=>r.ym===rym):E.filter
  <div class="three" style="margin-bottom:12px;border-top:0;padding-top:0"><div><small>收入</small><b class="num" id="r-inc" style="color:var(--green)">${fmt(inc)}</b></div><div><small>结余</small><b class="num" id="r-bal">${fmt(inc-ex)}</b></div><div><small>笔数</small><b class="num">${sel.length}</b></div></div>
  <div class="delta">${isM?deltaBox("环比 上月",ex,exOf(prevA))+deltaBox(`同比 去年${mlabel(rym)}`,ex,exOf(yoyA)):deltaBox(`同比 ${+ryr-1}年`,ex,exOf(prevA))+`<div><small>月均</small><b class="num">${fmt(hu(ex/(ryr===nowYM().slice(0,4)?+nowYM().slice(5):12)))}</b></div>`}</div></div>${curNote(sel)}
  ${parts.length?`<div class="card"><h2>分类占比<small>点分类查看明细</small></h2><div class="ring">${donut(parts,ex)}<div style="flex:1;font-size:15px">${parts.map(p=>`<a class="row" href="#/list" data-drill="${esc(p.k)}" data-v="${p.v}" style="padding:0;gap:10px"><span class="badge" style="background:${p.c}">${esc(p.k.slice(0,1))}</span><span class="m">${esc(p.k)}</span><span class="sub num">${(p.v/ex*100).toFixed(1)}%</span><span class="chev"></span></a>`).join("")}</div></div></div>`:""}
- <div class="card"><h2>${isM?"每日支出":"每月支出"}<small>最高 ${fmt(Math.max(0,...vals))}</small></h2>${bars(vals,labels,hi)}</div>
+ ${isM?`${mtd(rym)}<div class="card"><h2>每日支出<small>最高 ${fmt(Math.max(0,...vals))}</small></h2>${bars(vals,labels,hi)}</div>`:yearBody(ryr)}
  ${trendCard()}
+ ${isM?`<div class="sh" id="where">去哪儿</div>${storesCard(rym)}${ridesCard(rym)}`:""}
  ${rank("账户分布","account","acct")}${rank("商户排行","payee","payee")}</div>`}
 // ---- 分类趋势图: stacked bars per month (expense, JPY only, JST months, 0-months kept)
 const TR={range:"6",off:new Set(),sel:null};
@@ -180,7 +186,7 @@ function trendCard(){const T=trendData(),vis=T.cats.filter(c=>!TR.off.has(c)),n=
  const mover=(t,r,id)=>`<div class="tr-mv" id="${id}"><small>${t}</small>${r?`<b><i style="background:${colorOf(r.c)}"></i>${esc(r.c)}</b><span class="num">${r.d>0?"+":"-"}${fmt(Math.abs(r.d))} · ${pctTxt(r.v,r.p)}</span>`:`<b>—</b><span class="num">—</span>`}</div>`;
  const ok=Object.keys(T.other);
  return `<div class="card" id="trend" data-scope="${TS}"><h2>分类趋势图<small>${mlabel(T.ms[0])}–${mlabel(T.ms[n-1])} · ${TS==="all"?"":SC_L[TS]+" "}JPY 支出</small></h2>
- <div class="seg tr-seg">${segs}</div>${scSeg("trend",TS)}<a class="tr-year" id="tr-year" href="#/year?y=${T.ms[n-1].slice(0,4)}">${T.ms[n-1].slice(0,4)} 年度视图 <b aria-hidden="true">›</b></a>${trendSVG(T,vis,si)}
+ <div class="seg tr-seg">${segs}</div>${scSeg("trend",TS)}${rmode==="m"?`<a class="tr-year" id="tr-year" href="#/report?y=${T.ms[n-1].slice(0,4)}">${T.ms[n-1].slice(0,4)} 全年 <b aria-hidden="true">›</b></a>`:""}${trendSVG(T,vis,si)}
  <div class="tr-chips">${chips||'<span class="sub" style="font-size:13px">这段时间没有 JPY 支出</span>'}</div>${det}
  <div class="tr-mvs">${mover("涨得最多",up,"tr-up")}${mover("降得最多",dn,"tr-dn")}</div>
  ${ok.length?`<div class="cur" id="tr-other">未折算的外币支出（未计入图表）：${ok.map(c=>fmt(T.other[c],c)).join(" · ")}</div>`:""}</div>`}
@@ -235,7 +241,7 @@ const subsDue=()=>subItems().filter(x=>daysTo(x.next)<=7).length;
 // ---- 常去的店 (merchants.enc.json: {payee:{address,lat,lng,online}}; undefined = not loaded, null = missing/unreadable → no addresses)
 let MER;const MER_ON="ledger.merch.online";   // localStorage holds only "1"/"0" (include online merchants)
 async function loadMerch(){try{const r=await fetch((TESTPLAIN?"data/merchants.json":ENC.merch)+"?t="+Date.now(),{cache:"no-store"});MER=r.ok?(TESTPLAIN?await r.json():await decryptWith(KEY,await r.json())):null;if(MER&&typeof MER!=="object")MER=null}catch{MER=null}
- if(route()==="home"){const el=$("#stores");if(el){const busy=el.hasAttribute("aria-busy");el.outerHTML=storesCard(rym);if(busy)mv($("#stores"),[{opacity:.3},{opacity:1}],{d:220})}}}
+ if(route()==="report"){const el=$("#stores");if(el){const busy=el.hasAttribute("aria-busy");el.outerHTML=storesCard(rym);if(busy)mv($("#stores"),[{opacity:.3},{opacity:1}],{d:220})}}}
 const merOnline=()=>{try{return localStorage.getItem(MER_ON)==="1"}catch{return false}};
 const STORE_SKIP=new Set(["家政","买菜","订阅"]);
 function storeStats(ym,withOnline){const m=E.filter(r=>r.ym===ym&&r.type==="expense"&&!r.deleted&&jpyOf(r)!=null&&r.payee&&!STORE_SKIP.has(r.category));const by={};
@@ -307,33 +313,29 @@ function insights(ym){const isNow=ym===nowYM(),n=isNow?+today().slice(8):dimYM(y
  return out.sort((a,b)=>b.score-a.score).slice(0,2)}
 function insightsCard(ym){const a=insights(ym);if(!a.length)return "";
  return `<div class="card ins" id="insights" aria-label="本月洞察"><h2>${ym===nowYM()?"本月洞察":mlabel(ym)+"洞察"}</h2>${a.map(i=>i.k==="cat"?`<button class="ins-r" data-ins="${i.k}" data-jc="${esc(i.c)}" data-jm="${i.m}"><span class="ins-dot" aria-hidden="true"></span><span>${esc(i.t)}</span><b class="chev" aria-hidden="true">›</b></button>`:`<div class="ins-r" data-ins="${i.k}"><span class="ins-dot" aria-hidden="true"></span><span>${esc(i.t)}</span></div>`).join("")}</div>`}
-// ---- b9 年度视图 (#/year?y=2026): 12 monthly totals with the 固定/日常 split, category shares; ‹ › switches year, a month opens its report.
-const yearP=()=>{const m=/[?&]y=(\d{4})/.exec(location.hash);return m?m[1]:nowYM().slice(0,4)};
-function year(){const y=yearP(),mn=E.reduce((m,r)=>r.y<m?r.y:m,nowYM().slice(0,4)),mx=mxYM().slice(0,4);
- const ex=E.filter(r=>r.y===y&&r.type==="expense"&&jy(r)!=null),S=a=>a.reduce((s,r)=>s+jy(r),0);
+// b10: the year view lives in 报表 → 年 (#/year?y= redirects to #/report?y=). yearBody = 固定/日常 split, stacked monthly bars, month rows.
+function yearBody(y){const ex=E.filter(r=>r.y===y&&r.type==="expense"&&jy(r)!=null),S=a=>a.reduce((s,r)=>s+jy(r),0);
  const M=[...Array(12)].map((_,i)=>{const ym=y+"-"+pad(i+1),a=ex.filter(r=>r.ym===ym),f=S(a.filter(r=>FIXED.has(r.category)));return {ym,t:S(a),f,d:S(a)-f}});
- const tot=S(ex),fx=M.reduce((s,m)=>s+m.f,0),mxv=niceMax(Math.max(0,...M.map(m=>m.t))),cats=Object.entries(groupBy(ex,"category")).map(([k,a])=>[k,S(a)]).sort((a,b)=>b[1]-a[1]);
- const back=`<a class="nb" href="#/report"><span class="chev" style="transform:rotate(-135deg) scale(.8);border-color:var(--blue)"></span>报表</a>`;
- const sw=`<div class="period yr-sw" style="display:flex;align-items:center;justify-content:space-between;margin:4px -8px 0"><a class="nb pbtn" style="font-size:24px;text-decoration:none" id="yr-prev" ${y>mn?`href="#/year?y=${+y-1}"`:'aria-disabled="true"'} aria-label="上一年">‹</a><b id="yr-t">${y}年</b><a class="nb pbtn" style="font-size:24px;text-decoration:none" id="yr-next" ${y<mx?`href="#/year?y=${+y+1}"`:'aria-disabled="true"'} aria-label="下一年">›</a></div>`;
+ const tot=S(ex),fx=M.reduce((s,m)=>s+m.f,0),mxv=niceMax(Math.max(0,...M.map(m=>m.t)));
  const H=150,bw=16;let svg=`<svg class="yr-svg" viewBox="0 0 ${12*28} ${H+18}" width="100%" role="img" aria-label="${y}年每月支出">`;
  M.forEach((m,i)=>{const x=i*28+6,hf=m.f/mxv*H,hd=m.d/mxv*H;svg+=`<g class="yr-bar" data-ym="${m.ym}" data-t="${m.t}" data-f="${m.f}" data-d="${m.d}">`+(m.t?`<rect x="${x}" y="${(H-hf-hd).toFixed(1)}" width="${bw}" height="${hd.toFixed(1)}" rx="3" style="fill:var(--blue)"/><rect x="${x}" y="${(H-hf).toFixed(1)}" width="${bw}" height="${hf.toFixed(1)}" rx="3" style="fill:var(--ter)"/>`:`<rect x="${x}" y="${H-3}" width="${bw}" height="3" rx="1.5" style="fill:var(--fill)"/>`)+`<text x="${x+bw/2}" y="${H+14}" text-anchor="middle" class="tr-ax">${i+1}</text></g>`});
  svg+=`</svg>`;
- return navbar(`${y}年`,back)+`<div class="wrap">${sw}<div class="summary"><div class="lbl">${y}年支出 · JPY</div><div class="big num" id="yr-tot">${fmt(tot)}</div><div class="three"><div><small>日常</small><b class="num" id="yr-d">${fmt(tot-fx)}</b></div><div><small>固定</small><b class="num" id="yr-f">${fmt(fx)}</b></div><div><small>月均</small><b class="num">${fmt(hu(tot/(y===nowYM().slice(0,4)?+nowYM().slice(5):12)))}</b></div></div></div>
- <div class="card"><h2>每月支出<small><i class="yr-k" style="background:var(--blue)"></i>日常 <i class="yr-k" style="background:var(--ter)"></i>固定</small></h2>${svg}</div>
- <div class="sh">每月明细</div><div class="group" id="yr-months">${M.map(m=>`<button class="row yr-m" data-yjm="${m.ym}" data-t="${m.t}" aria-label="${mlabel(m.ym)} 报表"><span class="m">${mlabel(m.ym)}</span><span class="yr-split sub num">日常 ${fmt(m.d)} · 固定 ${fmt(m.f)}</span><span class="num">${fmt(m.t)}</span><span class="chev"></span></button>`).join("")}</div>
- <div class="card" id="yr-cats"><h2>分类占比<small>${y}年</small></h2>${cats.length?cats.map(([k,v])=>`<div class="rk" data-k="${esc(k)}" data-v="${v}" style="padding:8px 0"><div style="display:flex;justify-content:space-between;font-size:15px;margin-bottom:6px"><span>${esc(k)}${FIXED.has(k)?' <small class="sub">固定</small>':""}</span><span class="sub num">${fmt(v)} · ${(v/tot*100).toFixed(1)}%</span></div><div class="track"><i style="width:${(v/cats[0][1]*100).toFixed(1)}%;background:${colorOf(k)}"></i></div></div>`).join(""):'<div class="sub" style="font-size:15px;padding:8px 0">这一年没有 JPY 支出</div>'}</div></div>`}
-document.addEventListener("click",e=>{const b=e.target.closest("[data-yjm]");if(!b)return;rmode="m";rym=b.dataset.yjm;ryr=rym.slice(0,4);location.hash="#/report"});
+ return `<div class="card" id="yr-card" data-tot="${tot}"><h2>每月支出<small><i class="yr-k" style="background:var(--blue)"></i>日常 <b class="num" id="yr-d">${fmt(tot-fx)}</b> <i class="yr-k" style="background:var(--ter)"></i>固定 <b class="num" id="yr-f">${fmt(fx)}</b></small></h2>${svg}</div>
+ <div class="sh">每月明细</div><div class="group" id="yr-months">${M.map(m=>`<button class="row yr-m" data-yjm="${m.ym}" data-t="${m.t}" aria-label="${mlabel(m.ym)} 报表"><span class="m">${mlabel(m.ym)}</span><span class="yr-split sub num">日常 ${fmt(m.d)} · 固定 ${fmt(m.f)}</span><span class="num">${fmt(m.t)}</span><span class="chev"></span></button>`).join("")}</div>`}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-yjm]");if(!b)return;rmode="m";rym=b.dataset.yjm;ryr=rym.slice(0,4);if(route()==="report"){render();scrollTo(0,0)}else location.hash="#/report"});
 async function loadSubs(){try{const r=await fetch((TESTPLAIN?"data/subscriptions.json":ENC.subs)+"?t="+Date.now(),{cache:"no-store"});SUBS=r.ok?(TESTPLAIN?await r.json():await decryptWith(KEY,await r.json())):null}catch{SUBS=null}
- if(["home","subs","sapling","forest"].includes(route())){const y=scrollY;render();scrollTo(0,y)}else subBadge()}
+ if(["fixed","home","sapling","forest"].includes(route())){const y=scrollY;render();scrollTo(0,y)}else subBadge()}
 function subBadge(){const n=SUBS?subsDue():0,c=$("#pcnt");if(c){c.hidden=!n;c.textContent=n||""}}
 const subIcon=it=>`<span class="badge sub-ic" style="background:${colorOf("订阅")}">${esc((it.payee||"·").slice(0,1).toUpperCase())}</span>`;
-function homeSubs(){if(SUBS===undefined)return "";const a=subItems();if(!a.length)return "";const t=subTotals(a),n=a[0],soon=daysTo(n.next)<=7;
- return `<a class="subcard" id="home-subs" href="#/subs">${subIcon({payee:"订"})}<div class="m"><div class="p">订阅 · 每月固定 <b class="num" id="hs-mo">${fmt(t.mo)}</b></div><div class="n${soon?" soon":""}" id="hs-next">${dueLabel(n.next)} ${esc(n.payee)} ${fmt(n.amount)}</div></div><span class="chev"></span></a>`}
-function subs(){const h=navbar("订阅");if(SUBS===undefined)return h+`<div class="wrap"><div class="sk" style="height:120px;border-radius:12px;margin-top:8px"></div></div>`;
- const a=subItems();if(!a.length)return h+empty(`<span style="font-size:30px;font-weight:600;color:var(--sub)">订</span>`,"还没有订阅数据","记账管家整理好订阅后，会显示在这里。");
- const t=subTotals(a);
- return h+`<div class="wrap"><div class="summary subs-sum"><div class="lbl">每月固定支出</div><div class="big num" id="s-mo">${fmt(t.mo)}</div>
- <div class="sub" id="s-eff" style="font-size:15px">含年付折算 ${fmt(t.eff)}/月</div><div class="sub" id="s-yr" style="font-size:15px;margin-top:2px">全年合计 ${fmt(t.annual)}</div></div>
+// b10 固定 tab (#/fixed; #/subs and #/pending redirect): this month's fixed spending (家政 + 订阅 entries, JPY incl. converted) and the subscriptions.
+function fixedMonth(ym){const a=E.filter(r=>r.ym===ym&&r.type==="expense"&&FIXED.has(r.category)),t=exOf(a);if(!a.length)return "";const g=groupBy(base(a),"category");
+ return `<div class="summary" id="fx-sum" data-t="${t}"><div class="lbl">${ym===nowYM()?"本月":mlabel(ym)}固定支出（已入账）</div><div class="big num" id="fx-t">${fmt(t)}</div><div class="three">${[...FIXED].map(c=>`<div><small>${c}</small><b class="num" id="fx-${c==="家政"?"hk":"sub"}">${fmt(sum(g[c]||[]))}</b></div>`).join("")}<div><small>笔数</small><b class="num">${base(a).length}</b></div></div></div>${curNote(a)}
+ <div class="sh">本月固定支出明细</div><div class="group ic-rows" id="fx-list">${sorted(a).map(txRow).join("")}</div>`}
+function subs(){const h=navbar("固定"),ym=rym,fm=fixedMonth(ym);if(SUBS===undefined)return h+`<div class="wrap">${fm}<div class="sk" style="height:120px;border-radius:12px;margin-top:8px"></div></div>`;
+ const a=subItems();if(!a.length)return h+(fm?`<div class="wrap">${fm}<div class="readonly">还没有订阅数据。记账管家整理好订阅后，会显示在这里。</div></div>`:empty(`<span style="font-size:30px;font-weight:600;color:var(--sub)">固</span>`,"还没有固定支出","还没有订阅数据。家政、订阅等固定支出入账后，会显示在这里。"));
+ const t=subTotals(a),nx=a[0];
+ return h+`<div class="wrap">${fm}<div class="sh">订阅</div><div class="summary subs-sum"><div class="lbl">订阅 · 每月</div><div class="big num" id="s-mo">${fmt(t.mo)}</div>
+ <div class="sub" id="s-eff" style="font-size:15px">含年付折算 ${fmt(t.eff)}/月</div><div class="sub" id="s-yr" style="font-size:15px;margin-top:2px">全年合计 ${fmt(t.annual)}</div><div class="sub${daysTo(nx.next)<=7?" soon":""}" id="s-next" style="font-size:15px;margin-top:2px">下次扣费 ${esc(nx.payee||"—")} · ${dueLabel(nx.next)} · ${fmt(nx.amount)}</div></div>
  <div class="sh">按下次扣费排序</div><div class="group ic-rows" id="subs-list">${a.map(it=>{const n=daysTo(it.next),soon=n<=7;
   return `<div class="row tall subrow${soon?" soon":""}" role="button" tabindex="0" data-sub="${it.i}" data-next="${it.next}">${subIcon(it)}<div class="m"><div class="p">${esc(it.payee||"—")}</div><div class="n">${esc(it.note||"")}${it.note?" · ":""}<span class="due">${dueLabel(it.next)}</span></div></div>
   <div class="v"><div class="num">${fmt(it.amount)}</div><span class="ctag">${it.cycle==="yearly"?"年付":"月付"}</span></div><span class="chev"></span></div>`}).join("")}</div>
@@ -345,23 +347,24 @@ function openSub(i){const it=(SUBS.items||[])[i];if(!it)return;const rows=sorted
 document.addEventListener("click",e=>{const r=e.target.closest("[data-sub]");if(r)openSub(+r.dataset.sub)});
 // ---- batch 2: calendar heatmap, month-to-date, chart → list jumps
 const dimYM=ym=>new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5),0)).getUTCDate();
-const dayEx=ym=>{const o={};for(const r of E)if(r.ym===ym&&r.type==="expense"&&jpyOf(r)!=null&&inScope(r,HS))o[r.d]=(o[r.d]||0)+jpyOf(r);return o};
+const dayEx=(ym,src=E)=>{const o={};for(const r of src)if(r.ym===ym&&r.type==="expense"&&jpyOf(r)!=null)o[r.d]=(o[r.d]||0)+jpyOf(r);return o};
 function heatLevel(v,mx){if(!v)return 0;const f=v/mx;return f>.75?4:f>.5?3:f>.25?2:1}
-function heatmap(ym){const o=dayEx(ym),n=dimYM(ym),first=new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5)-1,1)).getUTCDay(),td=today(),vals=Object.values(o),mx=Math.max(1,...vals);
+function heatmap(ym,src){const o=dayEx(ym,src),n=dimYM(ym),first=new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5)-1,1)).getUTCDay(),td=today(),vals=Object.values(o),mx=Math.max(1,...vals);
  let cells="";for(let i=0;i<first;i++)cells+=`<span class="hm-pad"></span>`;
  for(let d=1;d<=n;d++){const ds=`${ym}-${pad(d)}`,v=o[ds]||0,fut=ds>td,lv=fut?0:heatLevel(v,mx);
   cells+=fut?`<span class="hm-c fut" data-d="${ds}" data-v="0"><i>${d}</i></span>`:`<button class="hm-c l${lv}${ds===td?" td":""}" data-d="${ds}" data-v="${v}" data-jd="${ds}" aria-label="${dlabel(ds)} 支出 ${fmt(v)}"><i>${d}</i></button>`}
  const top=vals.length?Object.entries(o).sort((a,b)=>b[1]-a[1])[0]:null;
- return `<div class="card" id="heat"><h2>每日支出<small>${top?`最高 ${+top[0].slice(8)}日 ${fmt(top[1])}`:"本月暂无 JPY 支出"}</small></h2>
+ return `<div class="card" id="heat"><h2>每日支出<small>${top?`最高 ${+top[0].slice(8)}日 ${fmt(top[1])}`:"这个月没有符合条件的支出"}</small></h2>
  <div class="hm-wd">${[...WD].map(w=>`<span>${w}</span>`).join("")}</div><div class="hm">${cells}</div>
  <div class="hm-lg"><span>少</span>${[0,1,2,3,4].map(l=>`<i class="l${l}"></i>`).join("")}<span>多</span><span style="flex:1"></span><span>点日期查看当天明细</span></div></div>`}
-function mtd(ym){const isNow=ym===nowYM(),n=isNow?+today().slice(8):dimYM(ym),pm=shiftYM(ym,-1),pn=Math.min(n,dimYM(pm));
- const s=(m,k)=>sum(E.filter(r=>r.ym===m&&r.type==="expense"&&jpyOf(r)!=null&&inScope(r,HS)&&+r.d.slice(8)<=k)),cur=s(ym,n),prev=s(pm,pn),d=cur-prev;
- const note=n>pn?`（上月只有 ${pn} 天）`:"";
- return `<div class="mtd" id="mtd" data-cur="${cur}" data-prev="${prev}" data-n="${n}" data-pn="${pn}"><div><small>${isNow?`本月至今 1–${n}日`:`${mlabel(ym)} 1–${n}日`}</small><b class="num">${fmt(cur)}</b></div>
- <div><small>上月同期 ${mlabel(pm)} 1–${pn}日${note}</small><b class="num">${fmt(prev)}</b></div>
- <div><small>差额</small><b class="num ${prev&&d>0?"up":prev&&d<0?"down":""}" id="mtd-d">${prev?(d>=0?"+":"-")+fmt(Math.abs(d))+" · "+(d>=0?"+":"")+(d/prev*100).toFixed(1)+"%":"—"}</b></div></div>`}
-function jump(o){Object.assign(st,{q:"",payee:"",scope:"",dest:"",cv:"",type:"",category:"",account:"",currency:"",pend:false,month:"",day:""},o);const q=$("#q");if(q)q.value="";
+// b10 报表: 同期对比 (moved from home): month-to-date vs the same days of last month and of the same month last year (JPY incl. converted)
+function mtd(ym){const isNow=ym===nowYM(),n=isNow?+today().slice(8):dimYM(ym),pm=shiftYM(ym,-1),pn=Math.min(n,dimYM(pm)),ly=(+ym.slice(0,4)-1)+ym.slice(4),ln=Math.min(n,dimYM(ly));
+ const s=(m,k)=>sum(E.filter(r=>r.ym===m&&r.type==="expense"&&jpyOf(r)!=null&&+r.d.slice(8)<=k)),cur=s(ym,n),prev=s(pm,pn),yo=s(ly,ln);
+ const dl=(c,p)=>p?`${c-p>=0?"+":"-"}${fmt(Math.abs(c-p))} · ${c-p>=0?"+":""}${((c-p)/p*100).toFixed(1)}%`:"—",cl=(c,p)=>p&&c>p?"up":p&&c<p?"down":"";
+ return `<div class="card" id="cmp"><h2>同期对比<small>${isNow?`本月至今 1–${n}日`:`${mlabel(ym)} 1–${n}日`} ${fmt(cur)}</small></h2>
+ <div class="mtd" id="mtd" data-cur="${cur}" data-prev="${prev}" data-n="${n}" data-pn="${pn}"><div><small>上月同期 ${mlabel(pm)} 1–${pn}日${n>pn?`（上月只有 ${pn} 天）`:""}</small><b class="num">${fmt(prev)}</b></div><div><small>差额</small><b class="num ${cl(cur,prev)}" id="mtd-d">${dl(cur,prev)}</b></div></div>
+ <div class="mtd" id="yoy" data-cur="${cur}" data-prev="${yo}" data-ly="${ly}"><div><small>去年同期 ${ly.slice(0,4)}年${+ly.slice(5)}月 1–${ln}日</small><b class="num">${fmt(yo)}</b></div><div><small>差额</small><b class="num ${cl(cur,yo)}" id="yoy-d">${yo?dl(cur,yo):"去年同期无记录"}</b></div></div></div>`}
+function jump(o){LVIEW="list";CALM=null;lvSync();Object.assign(st,{q:"",payee:"",scope:"",dest:"",cv:"",type:"",category:"",account:"",currency:"",pend:false,month:"",day:""},o);const q=$("#q");if(q)q.value="";
  if(route()==="list"){listRes();scrollTo(0,0)}else location.hash="#/list"}
 document.addEventListener("click",e=>{const rd=e.target.closest("[data-jdest]");if(rd&&!rd.closest("#overlay")){e.stopPropagation();return jump({dest:rd.dataset.jdest,month:rd.dataset.jm||"",type:"expense",cv:"1"})}const p=e.target.closest("[data-jp]");if(p&&!p.closest("#overlay")){e.stopPropagation();return jump({payee:p.dataset.jp,month:p.dataset.jm||"",type:"expense",cv:"1",scope:"store"})}const b=e.target.closest("[data-jd],[data-jc]");if(!b||b.closest("#overlay"))return;e.stopPropagation();const d=b.dataset;
  if(d.jd)jump({day:d.jd,month:d.jd.slice(0,7)});else jump({category:d.jc||"",month:d.jm||"",type:"expense"})},true);
@@ -481,11 +484,18 @@ function forest(){const y=spYP(),[lo,hi]=spRange(),ylo=lo.slice(0,4),yhi=hi.slic
  return navbar("森林",`<a class="nb" href="#/sapling"><span class="chev" style="transform:rotate(-135deg) scale(.8);border-color:var(--blue)"></span>树苗</a>`)+`<div class="wrap">${sw}<div class="fo-g" id="forest">${cells.join("")}</div><p class="foot sub">只有有记录的月份才有树。</p></div>`}
 document.addEventListener("click",e=>{const b=e.target.closest("#sp-hk");if(!b)return;SPHK=!SPHK;try{localStorage.setItem("ledger.sapling.hk",SPHK?"1":"0")}catch{}const y=scrollY;render();scrollTo(0,y)});
 // ---- router
-const ROUTES={home,list,subs,budget,report,year,sapling:saplingP,forest};const route=()=>location.hash.replace(/^#\/?/,"").split("?")[0]||"home";
+const ROUTES={home,list,fixed:subs,budget,report,sapling:saplingP,forest};
+// b10 redirects: old hashes keep working (history.replaceState, no extra history entry)
+function redirect(){const h=location.hash,k=route(),q=(h.split("?")[1]||"");
+ if(k==="subs"||k==="pending")return history.replaceState(null,"","#/fixed");
+ if(k==="year"){const y=/(?:^|&)y=(\d{4})/.exec(q);history.replaceState(null,"","#/report"+(y?"?y="+y[1]:"?y="+nowYM().slice(0,4)));return redirect()}
+ if(k==="trend"){history.replaceState(null,"","#/report?trend=1");return redirect()}
+ if(k==="report"&&q){const y=/(?:^|&)y=(\d{4})/.exec(q),m=/(?:^|&)m=(\d{4}-\d\d)/.exec(q);if(y){rmode="y";ryr=y[1]}else if(m){rmode="m";rym=m[1];ryr=rym.slice(0,4)}if(/trend=1/.test(q))RTREND=true;history.replaceState(null,"","#/report")}}
+let RTREND=false;const route=()=>location.hash.replace(/^#\/?/,"").split("?")[0]||"home";
 let lastRoute="";
-function render(){if(route()==="pending"){history.replaceState(null,"","#/subs")}const k=route(),fn=ROUTES[k]||home,changed=k!==lastRoute;lastRouteWas=lastRoute;if(k!==lastRoute&&$("#overlay").innerHTML){closeEntry()}lastRoute=k;if(k!=="list")$("#sheet").innerHTML="";
- $("#app").innerHTML=fn();const tk=k==="budget"||k==="sapling"||k==="forest"?"home":k==="year"?"report":k;document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.r===tk));
- subBadge();if(k==="list")listRes("h");trendScroll();layout();afterRender(k,changed);spHydrate();if(k==="home")spAnimate()}
+function render(){redirect();const k=route(),fn=ROUTES[k]||home,changed=k!==lastRoute;lastRouteWas=lastRoute;if(k!==lastRoute&&$("#overlay").innerHTML){closeEntry()}lastRoute=k;if(k!=="list")$("#sheet").innerHTML="";
+ $("#app").innerHTML=fn();const tk=k==="budget"||k==="sapling"||k==="forest"?"home":k;document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.r===tk));
+ subBadge();if(k==="list")listRes("h");trendScroll();layout();afterRender(k,changed);spHydrate();if(k==="home")spAnimate();if(RTREND&&k==="report"){RTREND=false;const t=$("#trend");if(t)scrollTo(0,t.getBoundingClientRect().top+scrollY-70)}}
 const go=()=>{if(route()==="list"&&lastRoute==="list"&&$("#res")){const n=hashP();if(n!==pg){pg=n;listRes(true);pageTop();return}}render();window.scrollTo(0,0)};
 function pageTop(){const r=$("#res");if(!r)return;const y=Math.max(0,r.getBoundingClientRect().top+scrollY-($(".top")?$(".top").getBoundingClientRect().height:0)-8);if(scrollY>y)scrollTo({top:y,behavior:RM.matches?"auto":"smooth"});
  const w=$("#res .wrap");if(w)mv(w,[{opacity:.4,transform:"translateY(8px)"},{opacity:1,transform:"none"}],{d:240})}
@@ -539,6 +549,8 @@ document.addEventListener("submit",async e=>{if(e.target.id!=="ul-form")return;e
   if(!(err&&err.name==="OperationError")){$("#ul-err").textContent="数据文件无法读取，请稍后再试";return}   // only an AES-GCM auth failure means a wrong password
   i.value="";$("#ul-err").textContent="密码不正确";box.classList.remove("shake");void box.offsetWidth;box.classList.add("shake");try{navigator.vibrate&&navigator.vibrate([20,40,20])}catch{}i.focus()}});
 document.addEventListener("click",e=>{if(e.target.closest("[data-lock]"))lock()});
+document.addEventListener("click",e=>{const v=e.target.closest("[data-lv]");if(v){LVIEW=v.dataset.lv;CALM=null;lvSync();pg=1;listRes();if(LVIEW==="cal")chartsIn(true);else if(!MV.list&&document.querySelector("#res .row[data-id]")){MV.list=true;listIn()}return}
+ const c=e.target.closest("[data-calm]");if(c&&!c.disabled){CALM=shiftYM(calYM(),+c.dataset.calm);listRes(true);chartsIn(true)}});
 // ---- data loading / refresh
 const SRCURL=TESTPLAIN?(({sample:"data/sample-ledger.json",trend:"data/sample-trend.json"})[new URLSearchParams(location.search).get("data")]||"data/ledger.json"):ENC.ledger;
 let sig="",lastCheck=0,busy=false,pendingL=null;

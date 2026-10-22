@@ -257,3 +257,7 @@ button.row.sp-row{width:100%;border:0;background:none;font:inherit;color:inherit
 .fo-c{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:14px;background:var(--card);color:inherit;text-decoration:none;min-width:84px;min-height:84px;font-size:13px}
 .fo-c svg{width:84px;height:84px;display:block}.fo-e{opacity:.6}
 .fo-dot{width:84px;height:84px;display:grid;place-items:center}.fo-dot::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--fill)}
+/* b10 明细 列表/日历 */
+.lv-hit{padding:6px 16px 8px}.lv-seg{max-width:240px}
+.cal-sw{display:flex;align-items:center;justify-content:space-between;margin:4px -8px 0}.cal-sw .pbtn{font-size:24px;min-width:44px;min-height:44px;background:none;border:0;color:var(--blue)}.cal-sw .pbtn:disabled{color:var(--dis)}
+#fx-list,#subs-list{margin-bottom:4px}
