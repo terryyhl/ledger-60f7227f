@@ -505,7 +505,7 @@ function openReview(i){if(!REV||!REV[i])return;const w=REV[i],o=$("#overlay");
  <div class="period rev-sw"><button class="nb pbtn" data-revi="${i+1}" aria-label="上一周"${i+1<REV.length?"":" disabled"}>‹</button><b id="rev-wk"></b><button class="nb pbtn" data-revi="${i-1}" aria-label="下一周"${i>0?"":" disabled"}>›</button></div>
  <p class="rev-sum" id="rev-sum"></p><ul class="rev-ul" id="rev-ul"></ul><div class="three rev-st" id="rev-st"></div><div class="readonly" id="rev-gen"></div></div></div>`;
  $("#rev-wk").textContent=revWk(w);$("#rev-sum").textContent=w.summary;const ul=$("#rev-ul");
- for(const b of (Array.isArray(w.bullets)?w.bullets:[])){const li=document.createElement("li");li.textContent=String(b);ul.appendChild(li)}
+ for(const b of (Array.isArray(w.bullets)?w.bullets:[]).filter(x=>x!=null&&String(x).trim()!=="")){const li=document.createElement("li");li.textContent=String(b);ul.appendChild(li)}
  const s=w.stats&&typeof w.stats==="object"?w.stats:{},stb=$("#rev-st");[["支出",typeof s.total==="number"?fmt(s.total):null],["笔数",typeof s.count==="number"?String(s.count):null]].forEach(([k,v])=>{if(v==null)return;const d=document.createElement("div"),sm=document.createElement("small"),bb=document.createElement("b");sm.textContent=k;bb.textContent=v;bb.className="num";d.append(sm,bb);stb.appendChild(d)});
  $("#rev-gen").textContent=typeof w.generated_at==="string"?"由记账管家生成于 "+w.generated_at.slice(0,10):"";document.body.style.overflow="hidden"}
 document.addEventListener("click",e=>{const b=e.target.closest("[data-rev],[data-revi]");if(!b||b.disabled)return;openReview(+(b.dataset.rev??b.dataset.revi))});
@@ -575,7 +575,7 @@ document.addEventListener("submit",async e=>{if(e.target.id!=="ul-form")return;e
   if(!(err&&err.name==="OperationError")){$("#ul-err").textContent="数据文件无法读取，请稍后再试";return}   // only an AES-GCM auth failure means a wrong password
   i.value="";$("#ul-err").textContent="密码不正确";box.classList.remove("shake");void box.offsetWidth;box.classList.add("shake");try{navigator.vibrate&&navigator.vibrate([20,40,20])}catch{}i.focus()}});
 document.addEventListener("click",e=>{if(e.target.closest("[data-lock]"))lock()});
-document.addEventListener("click",e=>{const v=e.target.closest("[data-lv]");if(v){LVIEW=v.dataset.lv;CALM=null;lvSync();pg=1;listRes();if(LVIEW==="cal")chartsIn(true);else if(!MV.list&&document.querySelector("#res .row[data-id]")){MV.list=true;listIn()}return}
+document.addEventListener("click",e=>{const v=e.target.closest("#lv-seg [data-lv]");if(v){LVIEW=v.dataset.lv;CALM=null;lvSync();pg=1;listRes();if(LVIEW==="cal")chartsIn(true);else if(!MV.list&&document.querySelector("#res .row[data-id]")){MV.list=true;listIn()}return}
  const c=e.target.closest("[data-calm]");if(c&&!c.disabled){CALM=shiftYM(calYM(),+c.dataset.calm);listRes(true);chartsIn(true)}});
 // ---- data loading / refresh
 const SRCURL=TESTPLAIN?(({sample:"data/sample-ledger.json",trend:"data/sample-trend.json"})[new URLSearchParams(location.search).get("data")]||"data/ledger.json"):ENC.ledger;
