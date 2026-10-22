@@ -1,0 +1,19 @@
+/* b11: art v4 seasonal motion (sp/sapling-v4-motion.css), loaded after sapling-v4.css. Scoped to the live detail tree with weather on (.sp-wx);
+ * independent of the wind sway in sapling-v4.css, so weather can be switched off (SPWX) while sway (incl. summer 2.4°) keeps running. */
+@keyframes sp-fall{0%{transform:translate(0,0) rotate(0);opacity:0}8%{opacity:1}85%{opacity:1}100%{transform:translate(var(--dx),var(--dy)) rotate(540deg);opacity:0}}
+@keyframes sp-drift{0%{transform:translate(0,0);opacity:0}10%{opacity:1}85%{opacity:1}100%{transform:translate(var(--dx),var(--dy));opacity:0}}
+@keyframes sp-puff{0%,82%{transform:translate(0,0);opacity:0}84%{opacity:1}100%{transform:translate(var(--dx),var(--dy));opacity:0}}
+@keyframes sp-bloom{from{transform:scale(.82)}to{transform:scale(1.06)}}
+@keyframes sp-glow{0%,100%{opacity:0;transform:translate(0,0)}50%{opacity:.95;transform:translate(var(--dx),var(--dy))}}
+@keyframes sp-pile{0%{opacity:0}6%,92%{opacity:1}100%{opacity:0}}
+.sp-svg.sp-live.sp-wx .sp-weather path,.sp-svg.sp-live.sp-wx .sp-bl{transform-box:fill-box;transform-origin:center}
+.sp-svg.sp-live.sp-wx .sp-petal{animation:sp-fall linear infinite}
+.sp-svg.sp-live.sp-wx .sp-fall{animation:sp-fall linear infinite}
+.sp-svg.sp-live.sp-wx .sp-flake{animation:sp-drift linear infinite}
+.sp-svg.sp-live.sp-wx .sp-puff{animation:sp-puff ease-in infinite}
+.sp-svg.sp-live.sp-wx .sp-bl{animation:sp-bloom 6s ease-in-out infinite alternate}
+.sp-svg.sp-live.sp-wx .sp-pile{animation:sp-pile 24s linear infinite both}
+@media(prefers-color-scheme:dark){.sp-svg.sp-live.sp-wx .sp-ff{animation:sp-glow ease-in-out infinite}}
+.sp-svg:not(.sp-wx) .sp-weather{display:none}
+.sp-paused .sp-svg *{animation-play-state:paused!important}
+@media(prefers-reduced-motion:reduce){.sp-svg,.sp-svg *{animation:none!important}.sp-svg .sp-pile{opacity:1}}

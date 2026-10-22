@@ -444,14 +444,16 @@ const spKey=g=>`${g.stage_idx-1}-${g.season}`;
 const SPF={};let spN=0;
 const spFrag=k=>SPF[k]||(SPF[k]=fetch("sp/"+k+".svg").then(r=>{if(!r.ok)throw 0;return r.text()}).catch(e=>{delete SPF[k];throw e}));
 const spNum=t=>{const n=++spN;return t.split("sp-clip-@").join("sp-clip-"+n)};
-const spSvg=(g,o={})=>`<svg class="sp-svg${o.live?" sp-live":""}" viewBox="0 0 240 240" width="${o.s||76}" height="${o.s||76}" role="img" aria-label="${mlabel(g.ym)}的树：Lv.${g.level} ${g.stage}" data-spk="${spKey(g)}"${o.live?' data-live="1"':""}><circle cx="120" cy="120" r="108" style="fill:var(--fill)"/></svg>`;
+// SPWX: seasonal weather (sp-weather, sapling-v4-motion.css) on/off, independent of sway
+let SPWX=true;
+const spSvg=(g,o={})=>`<svg class="sp-svg${o.live?" sp-live"+(SPWX?" sp-wx":""):""}" viewBox="0 0 240 240" width="${o.s||76}" height="${o.s||76}" role="img" aria-label="${mlabel(g.ym)}的树：Lv.${g.level} ${g.stage}" data-spk="${spKey(g)}"${o.live?' data-live="1"':""}></svg>`;
 function spSprite(){let s=$("#sp-sprite");if(!s){s=document.createElementNS("http://www.w3.org/2000/svg","svg");s.id="sp-sprite";s.setAttribute("class","sp-svg");s.setAttribute("aria-hidden","true");s.style.cssText="position:absolute;width:0;height:0;overflow:hidden";document.body.appendChild(s)}return s}
 function spHydrate(){document.querySelectorAll("#app svg[data-spk]:not([data-spok]),#overlay svg[data-spk]:not([data-spok])").forEach(s=>{const k=s.dataset.spk;s.dataset.spok="0";spFrag(k).then(t=>{if(!s.isConnected||!KEYOK())return;
   if(s.dataset.live)s.innerHTML=spNum(t);else{const sp=spSprite();if(!sp.querySelector("#sp-sym-"+k))sp.insertAdjacentHTML("beforeend",`<symbol id="sp-sym-${k}" viewBox="0 0 240 240"><g class="sp-svg">${spNum(t)}</g></symbol>`);s.innerHTML=`<use href="#sp-sym-${k}"/>`}
   s.dataset.spok="1";s.dispatchEvent(new Event("sp-ready"))},()=>s.removeAttribute("data-spok"))})}
 const KEYOK=()=>TESTPLAIN||!!KEY;
 const spClear=()=>{const s=$("#sp-sprite");if(s)s.remove();SPSEEN.clear();for(const k in SPMEMO)delete SPMEMO[k]};
-document.addEventListener("visibilitychange",()=>document.body.classList.toggle("sp-paused",document.hidden));
+const spVis=()=>document.body.classList.toggle("sp-paused",document.hidden);document.addEventListener("visibilitychange",spVis);spVis();
 function saplingCard(ym){const g=sapling(ym);if(!g)return "";
  return `<a class="card sap" id="sapling" href="#/sapling?m=${ym}" data-lv="${g.level}" data-total="${g.total}" aria-label="${mlabel(ym)}的树苗，Lv.${g.level} ${g.stage}"><span class="sap-art">${spSvg(g)}</span><span class="sap-tx"><span class="sap-h"><b>树苗</b><span class="sub">Lv.${g.level} · ${g.stage}</span></span>${track(g.nutrient_pct/100)}<span class="sap-n sub num">养料 ${fmt(g.total)}${g.to_next!=null?` · 距 Lv.${g.level+1} ${fmt(g.to_next)}`:" · 满级"}<i class="sap-plus" hidden></i></span></span><span class="chev"></span></a>`}
 // lastSeen per month (NOTES.md names localStorage sapling:lastSeen:YYYY-MM). Deviation: kept in memory only — level/total are derived from
