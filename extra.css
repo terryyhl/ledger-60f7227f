@@ -261,3 +261,11 @@ button.row.sp-row{width:100%;border:0;background:none;font:inherit;color:inherit
 .lv-hit{padding:6px 16px 8px}.lv-seg{max-width:240px}
 .cal-sw{display:flex;align-items:center;justify-content:space-between;margin:4px -8px 0}.cal-sw .pbtn{font-size:24px;min-width:44px;min-height:44px;background:none;border:0;color:var(--blue)}.cal-sw .pbtn:disabled{color:var(--dis)}
 #fx-list,#subs-list{margin-bottom:4px}
+/* b10 每周点评 */
+button.card.rev{display:flex;flex-direction:column;gap:6px;width:100%;border:0;text-align:left;font:inherit;color:inherit;cursor:pointer;min-height:44px}
+.rev-h{display:flex;justify-content:space-between;align-items:baseline;font-size:17px}.rev-h small{font-size:13px}
+.rev-p{font-size:15px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.rev-more{font-size:13px}
+a.card.rev-line{display:flex;align-items:center;gap:10px;min-height:44px;padding:10px 16px;text-decoration:none;color:inherit}
+.rev-k{font-weight:600;flex:0 0 auto}.rev-s{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
+.rev-sw{display:flex;align-items:center;justify-content:space-between}.rev-sw .pbtn{font-size:24px;min-width:44px;min-height:44px;background:none;border:0;color:var(--blue)}.rev-sw .pbtn:disabled{color:var(--dis)}
+.rev-sum{font-size:17px;line-height:1.5;margin:8px 0}.rev-ul{margin:0 0 12px 20px;font-size:15px;line-height:1.6}.rev-st{margin:8px 0}

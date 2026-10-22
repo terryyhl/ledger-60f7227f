@@ -62,6 +62,7 @@ function home(){const ym=rym,m=E.filter(r=>r.ym===ym),ex=monthEx(ym),inc=incOf(m
  ${homeSummary(ym,m,ex,inc,dd)}${curNote(m)}
  ${homeBudget(ym,ex)}
  ${insightsCard(ym)}
+ ${reviewLine()}
  ${saplingCard(ym)}
  <div class="sh" style="display:flex;justify-content:space-between"><span>最近 5 笔</span><a class="link" href="#/list" style="text-transform:none;text-decoration:none">全部</a></div>
  ${E.length?`<div class="group ic-rows" id="recent">${sorted(E).slice(0,5).map(txRow).join("")}</div>`:empty('<span class="ti-list" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',"还没有记录","记账管家入账并发布后，记录会显示在这里。")}</div>`}
@@ -129,7 +130,7 @@ function bars(vals,labels,hi){const mx=Math.max(0,...vals);return `<div class="c
 function report(){const isM=rmode==="m",sel=isM?E.filter(r=>r.ym===rym):E.filter(r=>r.y===ryr),ex=exOf(sel),inc=incOf(sel),exr=base(sel.filter(r=>r.type==="expense"));
 
  let h=navbar("报表","",`<div style="padding:0 16px"><div class="seg-hit"><div class="seg"><button data-m="m" class="${isM?"on":""}">月</button><button data-m="y" class="${isM?"":"on"}">年</button></div></div></div>`)+
- `<div class="wrap">${period()}`;
+ `<div class="wrap">${period()}${reviewCard()}`;
  if(!sel.length)return h+`</div>`+empty('<span class="ti-chart" style="width:30px;height:30px;color:var(--sub);position:relative;display:block"></span>',isM?"本月暂无数据":"本年暂无数据","有记录后会在这里显示分类占比和趋势。")+`<div class="wrap">${trendCard()}${isM?`<div class="sh" id="where">去哪儿</div>${storesCard(rym)}${ridesCard(rym)}`:""}</div>`;
  const prevA=isM?E.filter(r=>r.ym===shiftYM(rym,-1)):E.filter(r=>r.y===String(+ryr-1));const yoyA=isM?E.filter(r=>r.ym===(+rym.slice(0,4)-1)+rym.slice(4)):null;
  const g=groupBy(exr,"category"),parts=Object.entries(g).map(([k,a])=>({k,v:sum(a),c:colorOf(k)})).sort((a,b)=>b.v-a.v);
@@ -483,6 +484,27 @@ function forest(){const y=spYP(),[lo,hi]=spRange(),ylo=lo.slice(0,4),yhi=hi.slic
  const cells=[...Array(12)].map((_,i)=>{const ym=y+"-"+pad(i+1),g=sapling(ym);return g?`<a class="fo-c" href="#/sapling?m=${ym}" data-ym="${ym}" data-lv="${g.level}">${spSvg(g,{s:84})}<span class="num">${i+1}月</span><small class="sub">Lv.${g.level}</small></a>`:`<div class="fo-c fo-e" data-ym="${ym}" aria-label="${i+1}月 没有记录"><span class="fo-dot" aria-hidden="true"></span><span class="num">${i+1}月</span><small class="sub">—</small></div>`});
  return navbar("森林",`<a class="nb" href="#/sapling"><span class="chev" style="transform:rotate(-135deg) scale(.8);border-color:var(--blue)"></span>树苗</a>`)+`<div class="wrap">${sw}<div class="fo-g" id="forest">${cells.join("")}</div><p class="foot sub">只有有记录的月份才有树。</p></div>`}
 document.addEventListener("click",e=>{const b=e.target.closest("#sp-hk");if(!b)return;SPHK=!SPHK;try{localStorage.setItem("ledger.sapling.hk",SPHK?"1":"0")}catch{}const y=scrollY;render();scrollTo(0,y)});
+// ---- b10 每周点评: reviews.enc.json written by 记账管家 (no AI / external calls here). undefined = loading, null = missing/unreadable → no card.
+// All review text is set with textContent after render (never through innerHTML).
+let REV;
+const ENC_REV="data/reviews.enc.json";
+const revOk=a=>Array.isArray(a)?a.filter(x=>x&&typeof x==="object"&&/^\d{4}-\d\d-\d\d$/.test(x.week_start||"")&&typeof x.summary==="string").sort((a,b)=>a.week_start<b.week_start?1:-1):null;
+async function loadReviews(){try{const r=await fetch((TESTPLAIN?"data/reviews.json":ENC_REV)+"?t="+Date.now(),{cache:"no-store"});REV=r.ok?revOk(TESTPLAIN?await r.json():await decryptWith(KEY,await r.json())):null;if(REV&&!REV.length)REV=null}catch{REV=null}
+ if(["home","report"].includes(route())){const y=scrollY;render();scrollTo(0,y)}}
+const revWk=w=>`${+w.week_start.slice(5,7)}月${+w.week_start.slice(8)}日–${/^\d{4}-\d\d-\d\d$/.test(w.week_end||"")?(+w.week_end.slice(5,7))+"月"+(+w.week_end.slice(8))+"日":""}`;
+// placement: full card at the top of 报表; home gets a one-line entry (home already has overview, budget, insights, sapling, latest 5)
+const reviewLine=()=>REV?`<a class="card rev-line" id="home-review" href="#/report"><span class="rev-k">本周点评</span><span class="rev-s sub" data-revt="summary"></span><span class="chev"></span></a>`:"";
+const reviewCard=()=>REV?`<button class="card rev" id="review" data-rev="0" aria-label="本周点评，查看全部要点"><span class="rev-h"><b>本周点评</b><small class="sub" data-revt="wk"></small></span><span class="rev-p" data-revt="summary"></span><span class="rev-more sub">查看要点与往期 ›</span></button>`:"";
+function revFill(){if(!REV)return;const w=REV[0];document.querySelectorAll("#app [data-revt]").forEach(el=>{el.textContent=el.dataset.revt==="wk"?revWk(w):w.summary})}
+function openReview(i){if(!REV||!REV[i])return;const w=REV[i],o=$("#overlay");
+ o.innerHTML=`<div class="dim" data-eclose="1"></div><div class="sheet" id="revsheet" role="dialog" aria-label="每周点评"><div class="grab"></div><div class="navbar"><span></span><span class="t">每周点评</span><button class="nb b" data-eclose="1">完成</button></div><div class="body" style="padding:0 16px 24px">
+ <div class="period rev-sw"><button class="nb pbtn" data-revi="${i+1}" aria-label="上一周"${i+1<REV.length?"":" disabled"}>‹</button><b id="rev-wk"></b><button class="nb pbtn" data-revi="${i-1}" aria-label="下一周"${i>0?"":" disabled"}>›</button></div>
+ <p class="rev-sum" id="rev-sum"></p><ul class="rev-ul" id="rev-ul"></ul><div class="three rev-st" id="rev-st"></div><div class="readonly" id="rev-gen"></div></div></div>`;
+ $("#rev-wk").textContent=revWk(w);$("#rev-sum").textContent=w.summary;const ul=$("#rev-ul");
+ for(const b of (Array.isArray(w.bullets)?w.bullets:[])){const li=document.createElement("li");li.textContent=String(b);ul.appendChild(li)}
+ const s=w.stats&&typeof w.stats==="object"?w.stats:{},stb=$("#rev-st");[["支出",typeof s.total==="number"?fmt(s.total):null],["笔数",typeof s.count==="number"?String(s.count):null]].forEach(([k,v])=>{if(v==null)return;const d=document.createElement("div"),sm=document.createElement("small"),bb=document.createElement("b");sm.textContent=k;bb.textContent=v;bb.className="num";d.append(sm,bb);stb.appendChild(d)});
+ $("#rev-gen").textContent=typeof w.generated_at==="string"?"由记账管家生成于 "+w.generated_at.slice(0,10):"";document.body.style.overflow="hidden"}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-rev],[data-revi]");if(!b||b.disabled)return;openReview(+(b.dataset.rev??b.dataset.revi))});
 // ---- router
 const ROUTES={home,list,fixed:subs,budget,report,sapling:saplingP,forest};
 // b10 redirects: old hashes keep working (history.replaceState, no extra history entry)
@@ -495,7 +517,7 @@ let RTREND=false;const route=()=>location.hash.replace(/^#\/?/,"").split("?")[0]
 let lastRoute="";
 function render(){redirect();const k=route(),fn=ROUTES[k]||home,changed=k!==lastRoute;lastRouteWas=lastRoute;if(k!==lastRoute&&$("#overlay").innerHTML){closeEntry()}lastRoute=k;if(k!=="list")$("#sheet").innerHTML="";
  $("#app").innerHTML=fn();const tk=k==="budget"||k==="sapling"||k==="forest"?"home":k;document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.r===tk));
- subBadge();if(k==="list")listRes("h");trendScroll();layout();afterRender(k,changed);spHydrate();if(k==="home")spAnimate();if(RTREND&&k==="report"){RTREND=false;const t=$("#trend");if(t)scrollTo(0,t.getBoundingClientRect().top+scrollY-70)}}
+ subBadge();if(k==="list")listRes("h");trendScroll();layout();afterRender(k,changed);revFill();spHydrate();if(k==="home")spAnimate();if(RTREND&&k==="report"){RTREND=false;const t=$("#trend");if(t)scrollTo(0,t.getBoundingClientRect().top+scrollY-70)}}
 const go=()=>{if(route()==="list"&&lastRoute==="list"&&$("#res")){const n=hashP();if(n!==pg){pg=n;listRes(true);pageTop();return}}render();window.scrollTo(0,0)};
 function pageTop(){const r=$("#res");if(!r)return;const y=Math.max(0,r.getBoundingClientRect().top+scrollY-($(".top")?$(".top").getBoundingClientRect().height:0)-8);if(scrollY>y)scrollTo({top:y,behavior:RM.matches?"auto":"smooth"});
  const w=$("#res .wrap");if(w)mv(w,[{opacity:.4,transform:"translateY(8px)"},{opacity:1,transform:"none"}],{d:240})}
@@ -530,7 +552,7 @@ class Locked extends Error{}
 async function currentKey(){if(KEY)return KEY;const k=await keyLoad();if(k&&k.key)KEY=k;return KEY}
 async function openEnc(enc){const K=await currentKey();if(!K)throw new Locked("locked");
  try{return await decryptWith(K,enc)}catch(e){KEY=null;await keyClear();throw new Locked("key no longer works")}}   // e.g. password changed
-function wipe(){rcRevoke();ghostsClear();MV.list=false;selId=null;{const p=$("#pane");if(p){p.innerHTML="";delete p.dataset.k}}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;MER=undefined;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;pg=1;Object.assign(st,{q:"",payee:"",scope:"",dest:"",cv:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
+function wipe(){rcRevoke();ghostsClear();MV.list=false;selId=null;{const p=$("#pane");if(p){p.innerHTML="";delete p.dataset.k}}document.body.classList.remove("two-pane","segmented");E=[];BUD=null;SUBS=null;MER=undefined;REV=undefined;pendingL=null;sig="";colorMap={};lastUpd=null;TR.off.clear();TR.sel=null;pg=1;Object.assign(st,{q:"",payee:"",scope:"",dest:"",cv:"",month:"",type:"",category:"",account:"",currency:"",pend:false});
  ["#app","#overlay","#sheet"].forEach(q=>{const el=$(q);if(el)el.innerHTML=""});const t=$("#toast");if(t){t.textContent="";t.classList.remove("show")}
  const nb=$("#newbar");if(nb)nb.hidden=true;const c=$("#pcnt");if(c){c.hidden=true;c.textContent=""}document.body.style.overflow=""}
 async function lock(){KEY=null;wipe();spClear();await keyClear();showUnlock()}
@@ -573,7 +595,7 @@ function setBusy(v){busy=v;document.querySelectorAll(".rbtn").forEach(b=>b.class
 async function refresh(){if(busy)return;setBusy(true);const old=new Set(E.map(r=>r.id));
  try{const {L,cached,server}=await fetchLedger();lastCheck=Date.now();apply(L);pendingL=null;$("#newbar").hidden=true;
   if(cached){rerender();toast(server?"服务器暂时不可用，显示缓存数据":"离线，显示缓存数据")}else{lastUpd=Date.now();rerender();toast(`已更新 · +${E.filter(r=>!old.has(r.id)).length} 条`)}}
- catch(e){if(e instanceof Locked){setBusy(false);ptrReset();return showUnlock("密码已更改或已失效，请重新输入")}toast(e&&e.server?"服务器暂时不可用，显示缓存数据":"离线，显示缓存数据")}finally{setBusy(false);ptrReset();if(KEY||TESTPLAIN){loadSubs();loadMerch()}}}
+ catch(e){if(e instanceof Locked){setBusy(false);ptrReset();return showUnlock("密码已更改或已失效，请重新输入")}toast(e&&e.server?"服务器暂时不可用，显示缓存数据":"离线，显示缓存数据")}finally{setBusy(false);ptrReset();if(KEY||TESTPLAIN){loadSubs();loadMerch();loadReviews()}}}
 function applyPending(){if(!pendingL)return;const old=new Set(E.map(r=>r.id));apply(pendingL);pendingL=null;lastUpd=Date.now();$("#newbar").hidden=true;rerender();toast(`已更新 · +${E.filter(r=>!old.has(r.id)).length} 条`)}
 async function silentCheck(){lastCheck=Date.now();try{const {L,cached}=await fetchLedger();if(!cached&&sigOf(L)!==sig){pendingL=L;$("#newbar").hidden=false}}catch(e){if(e instanceof Locked)showUnlock("密码已更改或已失效，请重新输入")}}
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&E&&sig&&Date.now()-lastCheck>5*60e3)silentCheck()});
@@ -604,7 +626,7 @@ document.addEventListener("touchcancel",()=>{ptrArm(false);if(tx&&tx.axis==="ptr
 // ---- boot
 const SKEL=`<div class="top"><div class="lt"><h1>账本</h1></div></div><div class="wrap" id="skeleton" aria-busy="true" aria-label="加载中"><div class="sk" style="width:45%;height:34px;margin:8px 0 16px"></div><div class="sk" style="height:150px;border-radius:12px"></div><div class="sk" style="height:52px;margin-top:12px;border-radius:12px"></div><div class="sk" style="width:30%;height:13px;margin:24px 0 8px"></div>${'<div class="sk" style="height:60px;margin-top:2px;border-radius:12px"></div>'.repeat(5)}</div>`;
 async function boot(){if(!TESTPLAIN&&!(await currentKey()))return showUnlock();document.body.classList.remove("locked");$("#app").innerHTML=SKEL;
- try{const {L,cached,server}=await fetchLedger();apply(L);lastCheck=Date.now();if(!cached)lastUpd=Date.now();render();loadSubs();loadMerch();if(cached)toast(server?"服务器暂时不可用，显示缓存数据":"离线，显示缓存数据")}
+ try{const {L,cached,server}=await fetchLedger();apply(L);lastCheck=Date.now();if(!cached)lastUpd=Date.now();render();loadSubs();loadMerch();loadReviews();if(cached)toast(server?"服务器暂时不可用，显示缓存数据":"离线，显示缓存数据")}
  catch(e){if(e instanceof Locked)return showUnlock("密码已更改或已失效，请重新输入");$("#app").innerHTML=navbar("账本")+empty('<span style="font-size:30px;font-weight:600;color:var(--sub)">!</span>',...(e&&e.server?["服务器暂时不可用","服务器出错了，本机也还没有缓存数据。稍后再试一次。"]:["连不上网络","没能读取账目数据。检查网络后再试一次。"]),'<button class="btn sec" data-retry="1">重试</button>')}}
 boot();
 if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
