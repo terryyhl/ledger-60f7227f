@@ -274,3 +274,6 @@ a.card.rev-line{display:flex;align-items:center;gap:10px;min-height:44px;padding
 html{touch-action:manipulation}
 a,img,button,[role="button"],svg{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
 input,textarea,[contenteditable],[contenteditable] *,[data-f="note"]{-webkit-touch-callout:default;-webkit-user-select:text;user-select:text}
+/* b12: pull-down dismiss — header drags never scroll the page; sheet content never chains its overscroll to the page behind. */
+#overlay .sheet .grab,#overlay .sheet .navbar{touch-action:none}#overlay .sheet .body{overscroll-behavior-y:contain}
+#overlay .sheet .grab{position:relative}#overlay .sheet .grab::before{content:"";position:absolute;inset:-10px -40px}

@@ -1,0 +1,25 @@
+/* b12: art v5.1 seasonal motion (sp/sapling-v5.1-motion.css), loaded after sapling-v5.1.css. Scoped to the live detail tree with weather on (.sp-wx);
+ * independent of the wind sway in sapling-v5.1.css, so weather can be switched off (SPWX) while sway (incl. summer 2.4°) keeps running. */
+@keyframes sp-fall{0%{transform:translate(0,0) rotate(0);opacity:0}8%{opacity:1}85%{opacity:1}100%{transform:translate(var(--dx),var(--dy)) rotate(540deg);opacity:0}}
+@keyframes sp-drift{0%{transform:translate(0,0);opacity:0}10%{opacity:1}85%{opacity:1}100%{transform:translate(var(--dx),var(--dy));opacity:0}}
+@keyframes sp-flake{0%{transform:translate(0,0);opacity:0}8%{opacity:1}30%{transform:translate(calc(var(--dx)*.3 + var(--wy)),calc(var(--dy)*.3))}55%{transform:translate(calc(var(--dx)*.55 - var(--wy)),calc(var(--dy)*.55))}80%{transform:translate(calc(var(--dx)*.8 + var(--wy)),calc(var(--dy)*.8))}90%{opacity:1}100%{transform:translate(var(--dx),var(--dy));opacity:0}}
+@keyframes sp-puff{0%,82%{transform:translate(0,0);opacity:0}84%{opacity:1}100%{transform:translate(var(--dx),var(--dy));opacity:0}}
+@keyframes sp-gust{0%{transform:translate(0,0) rotate(0);opacity:0}8%{opacity:1}20%{transform:translate(calc(var(--dx)*.12),calc(var(--wy)*-1)) rotate(35deg)}40%{transform:translate(calc(var(--dx)*.35),calc(var(--dy)*.25 + var(--wy))) rotate(-20deg)}60%{transform:translate(calc(var(--dx)*.58),calc(var(--dy)*.45 - var(--wy))) rotate(50deg)}80%{transform:translate(calc(var(--dx)*.8),calc(var(--dy)*.72 + var(--wy))) rotate(-10deg);opacity:.9}100%{transform:translate(var(--dx),var(--dy)) rotate(40deg);opacity:0}}
+@keyframes sp-tumble{0%{transform:translate(0,0) rotate(0) scale(1,1);opacity:0}8%{opacity:1}25%{transform:translate(calc(var(--dx)*.2),calc(var(--wy)*-1)) rotate(140deg) scale(1,-.4)}50%{transform:translate(calc(var(--dx)*.5),calc(var(--dy)*.4)) rotate(300deg) scale(1,1)}75%{transform:translate(calc(var(--dx)*.75),calc(var(--dy)*.65 + var(--wy))) rotate(420deg) scale(1,-.5)}100%{transform:translate(var(--dx),var(--dy)) rotate(540deg) scale(1,1);opacity:0}}
+@keyframes sp-bloom{from{transform:scale(.82)}to{transform:scale(1.06)}}
+@keyframes sp-glow{0%,100%{opacity:0;transform:translate(0,0)}50%{opacity:.95;transform:translate(var(--dx),var(--dy))}}
+@keyframes sp-pile{0%{opacity:0}6%,92%{opacity:1}100%{opacity:0}}
+.sp-svg.sp-live.sp-wx .sp-weather path,.sp-svg.sp-live.sp-wx .sp-bl{transform-box:fill-box;transform-origin:center}
+.sp-svg.sp-live.sp-wx .sp-petal{animation:sp-fall linear infinite}
+.sp-svg.sp-live.sp-wx .sp-fall{animation:sp-fall linear infinite}
+.sp-svg.sp-live.sp-wx .sp-flake{animation:sp-flake linear infinite}
+.sp-svg.sp-live.sp-wx .sp-puff{animation:sp-puff ease-in infinite}
+.sp-svg.sp-live.sp-wx .sp-gust{animation:sp-gust ease-in-out infinite}.sp-svg.sp-live.sp-wx .sp-tumble{animation-name:sp-tumble}
+.sp-svg.sp-live.sp-wx .sp-bl{animation:sp-bloom 6s ease-in-out infinite alternate}
+.sp-svg.sp-live.sp-wx .sp-pile{animation:sp-pile 24s linear infinite both}
+@media(prefers-color-scheme:dark){.sp-svg.sp-live.sp-wx .sp-ff{animation:sp-glow ease-in-out infinite}}
+.sp-svg:not(.sp-wx) .sp-weather{display:none}
+.sp-paused .sp-svg *{animation-play-state:paused!important}
+@media(prefers-reduced-motion:reduce){.sp-svg,.sp-svg *{animation:none!important}.sp-svg .sp-pile{opacity:1}}
+/* b12 P3: falling flakes in light mode were white-on-#F2F2F7 (~1.1:1); icy-blue fill (~2:1) and a slightly wider rim. Dark mode unchanged. */
+@media(prefers-color-scheme:light){.sp-svg .sp-flake{fill:#8FB3D9;stroke:#1D3B2A;stroke-width:.65}}
