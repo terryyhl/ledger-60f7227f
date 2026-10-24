@@ -35,3 +35,8 @@ body.locked{padding-bottom:0}
 body.two-pane #pane{bottom:0;padding-bottom:calc(80px + max(12px,env(safe-area-inset-bottom)))}
 .tb .tab{min-height:0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 
+/* b14: drag */
+.tabbar.tb{touch-action:none;overscroll-behavior:contain}
+.tb.drag::before{transition:none;transform:translateX(var(--tb-x,0))}
+.tb.drag .tab.hov{color:var(--tb-act)}.tb.drag .tab.hov svg{transform:scale(1.14)}
+@media (prefers-reduced-motion:reduce){.tb.drag .tab.hov svg{transform:none}}

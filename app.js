@@ -645,7 +645,7 @@ function ptrReset(){const p=$("#ptr");p.classList.remove("ready","pull","spin");
 const atTop=()=>(document.scrollingElement||document.documentElement).scrollTop<=0&&scrollY<=0;
 function ptrGuard(e){if(tx&&tx.axis==="ptr"&&e.cancelable)e.preventDefault()}
 const ptrArm=on=>on?document.addEventListener("touchmove",ptrGuard,{passive:false}):document.removeEventListener("touchmove",ptrGuard,{passive:false});
-document.addEventListener("touchstart",e=>{ptrArm(false);if(e.touches.length!==1||$("#overlay").innerHTML||$("#sheet").innerHTML||e.target.closest(".sheet,.chips,.dim"))return tx=null;const t=e.touches[0];tx={x:t.clientX,y:t.clientY,top:atTop(),axis:null,buzz:false};if(tx.top)ptrArm(true)},{passive:true});
+document.addEventListener("touchstart",e=>{ptrArm(false);if(e.touches.length!==1||$("#overlay").innerHTML||$("#sheet").innerHTML||e.target.closest(".sheet,.chips,.dim,.tb"))return tx=null;const t=e.touches[0];tx={x:t.clientX,y:t.clientY,top:atTop(),axis:null,buzz:false};if(tx.top)ptrArm(true)},{passive:true});
 document.addEventListener("touchmove",e=>{if(!tx)return;const t=e.touches[0],dx=t.clientX-tx.x,dy=t.clientY-tx.y;
  if(!tx.axis&&Math.abs(dx)+Math.abs(dy)>10)tx.axis=Math.abs(dx)>Math.abs(dy)*1.2?"x":(dy>0&&tx.top&&atTop()&&!busy?"ptr":"y");
  if(tx.axis==="ptr"){const h=damp(dy),p=$("#ptr");p.classList.add("pull");ptrSet(h,false);
@@ -654,6 +654,46 @@ document.addEventListener("touchend",e=>{ptrArm(false);if(!tx)return;const t=e.c
  if(a==="ptr"){$("#ptr").classList.remove("pull");if(ptrH>=PTR.TH&&!busy){ptrSet(PTR.HOLD,true);refresh()}else ptrReset();return}
  if(a==="x"&&Math.abs(dx)>60&&["home","report","budget"].includes(route()))shiftPeriod(dx<0?1:-1)},{passive:true});
 document.addEventListener("touchcancel",()=>{ptrArm(false);if(tx&&tx.axis==="ptr"&&!busy)ptrReset();tx=null},{passive:true});
+// b14: drag the glass tab pill (pointer events). Horizontal drag on the bar moves the pill under the finger; release snaps (spring, or instant under Reduce Motion) to the nearest tab;
+// a flick (velocity from samples in the last 100ms only, as b12) goes one tab in its direction. <8px movement = tap (native click). Vertical-first moves are not captured. 2nd pointer / cancel / lost capture -> reset.
+const TD={SLOP:8,FLICK:.45,WIN:100,MINS:3,MIND:24,MINF:.3};let td=null;
+// pure flick test: s=[[t,x,isMove]...] (s[0]=pointerdown), tUp=release time, w=tab width -> -1|0|1. Needs: last sample <=100ms before release, >=3 move samples
+// in that window, |x_last-x_down| >= max(24px, .3*w), and |v| >= .45px/ms where v uses only the samples inside the 100ms window.
+function tdFlick(s,tUp,w){if(!s||s.length<2)return 0;const last=s[s.length-1];if(tUp-last[0]>TD.WIN)return 0;
+ const win=s.filter(q=>tUp-q[0]<=TD.WIN);if(win.filter(q=>q[2]).length<TD.MINS)return 0;
+ const dist=last[1]-s[0][1];if(Math.abs(dist)<Math.max(TD.MIND,TD.MINF*w))return 0;
+ const a=win[0],dt=last[0]-a[0];if(dt<=0)return 0;const v=(last[1]-a[1])/dt;return Math.abs(v)>=TD.FLICK&&Math.sign(v)===Math.sign(dist)?Math.sign(v):0}
+function tdTabs(){return [...document.querySelectorAll(".tb .tab")]}
+function tdCur(){const t=tdTabs();return Math.max(0,t.findIndex(x=>x.classList.contains("on")))}
+function tdGeo(nav){const r=nav.getBoundingClientRect(),pad=parseFloat(getComputedStyle(nav).getPropertyValue("--tb-pad"))||6,w=(r.width-2*pad)/4;return {r,pad,w}}
+function tdHov(i){tdTabs().forEach((t,k)=>t.classList.toggle("hov",k===i))}
+function tdEnd(nav,i,go){nav.classList.remove("drag");nav.style.removeProperty("--tb-x");tdHov(-1);
+ if(i==null){nav.style.removeProperty("--tb-i");return}
+ nav.style.setProperty("--tb-i",i);const t=tdTabs()[i];
+ if(go&&t){const h=t.getAttribute("href");if(location.hash!==h&&!(h==="#/"&&(location.hash===""||location.hash==="#")))location.hash=h}
+ setTimeout(()=>{if(!td)nav.style.removeProperty("--tb-i")},700)}
+function tdReset(nav){if(!td)return;const was=td.on;try{nav.hasPointerCapture(td.id)&&nav.releasePointerCapture(td.id)}catch{}td=null;if(was)tdEnd(nav,null,false)}
+(()=>{const nav=document.querySelector(".tb");if(!nav)return;
+ nav.addEventListener("pointerdown",e=>{if(td){tdReset(nav);td={dead:true,id:-1};return}
+  if(e.button!==0||!e.isPrimary||$("#overlay").innerHTML||$("#sheet").innerHTML||document.body.classList.contains("locked"))return;
+  nav.__tdClick=false;td={id:e.pointerId,x0:e.clientX,y0:e.clientY,on:false,s:[[e.timeStamp,e.clientX,0]],i0:tdCur()}});
+ nav.addEventListener("pointermove",e=>{if(!td||td.dead||e.pointerId!==td.id)return;const dx=e.clientX-td.x0,dy=e.clientY-td.y0;
+  if(!td.on){if(Math.abs(dx)<TD.SLOP&&Math.abs(dy)<TD.SLOP)return;
+   if(Math.abs(dy)>Math.abs(dx)){td=null;return}
+   td.on=true;try{nav.setPointerCapture(e.pointerId)}catch{}nav.classList.add("drag")}
+  const g=tdGeo(nav),x=Math.min(Math.max(e.clientX-g.r.left-g.pad-g.w/2,0),3*g.w);
+  nav.style.setProperty("--tb-x",x+"px");tdHov(Math.round(x/g.w));td.x=x;td.w=g.w;
+  td.s.push([e.timeStamp,e.clientX,1]);if(td.s.length>64)td.s.splice(1,1)});
+ nav.addEventListener("pointerup",e=>{if(!td)return;if(td.dead){td=null;return}if(e.pointerId!==td.id)return;const d=td;td=null;
+  try{nav.hasPointerCapture(e.pointerId)&&nav.releasePointerCapture(e.pointerId)}catch{}
+  if(!d.on)return;
+  const f=d.x/d.w,dir=tdFlick(d.s,e.timeStamp,d.w);let i=Math.round(f);if(dir)i=dir>0?Math.floor(f+.001)+1:Math.ceil(f-.001)-1;
+  i=Math.max(0,Math.min(3,i));nav.__tdClick=true;setTimeout(()=>nav.__tdClick=false,400);tdEnd(nav,i,true)});
+ nav.addEventListener("pointercancel",()=>tdReset(nav));
+ nav.addEventListener("lostpointercapture",e=>{if(td&&e.target===nav&&e.pointerId===td.id)tdReset(nav)});
+ nav.addEventListener("click",e=>{if(nav.__tdClick){nav.__tdClick=false;e.preventDefault();e.stopPropagation()}},true);
+ document.addEventListener("touchstart",e=>{if(e.touches.length>1&&td){if(td.on)tdReset(nav);else td=null}},{capture:true,passive:true});
+ nav.addEventListener("contextmenu",e=>e.preventDefault())})();
 // ---- boot
 const SKEL=`<div class="top"><div class="lt"><h1>账本</h1></div></div><div class="wrap" id="skeleton" aria-busy="true" aria-label="加载中"><div class="sk" style="width:45%;height:34px;margin:8px 0 16px"></div><div class="sk" style="height:150px;border-radius:12px"></div><div class="sk" style="height:52px;margin-top:12px;border-radius:12px"></div><div class="sk" style="width:30%;height:13px;margin:24px 0 8px"></div>${'<div class="sk" style="height:60px;margin-top:2px;border-radius:12px"></div>'.repeat(5)}</div>`;
 async function boot(){if(!TESTPLAIN&&!(await currentKey()))return showUnlock();document.body.classList.remove("locked");$("#app").innerHTML=SKEL;
