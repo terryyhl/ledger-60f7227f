@@ -663,36 +663,56 @@ function tdFlick(s,tUp,w){if(!s||s.length<2)return 0;const last=s[s.length-1];if
  const win=s.filter(q=>tUp-q[0]<=TD.WIN);if(win.filter(q=>q[2]).length<TD.MINS)return 0;
  const dist=last[1]-s[0][1];if(Math.abs(dist)<Math.max(TD.MIND,TD.MINF*w))return 0;
  const a=win[0],dt=last[0]-a[0];if(dt<=0)return 0;const v=(last[1]-a[1])/dt;return Math.abs(v)>=TD.FLICK&&Math.sign(v)===Math.sign(dist)?Math.sign(v):0}
-function tdTabs(){return [...document.querySelectorAll(".tb .tab")]}
+function tdTabs(){return [...document.querySelectorAll(".tb a.tab")]}
 function tdCur(){const t=tdTabs();return Math.max(0,t.findIndex(x=>x.classList.contains("on")))}
 function tdGeo(nav){const r=nav.getBoundingClientRect(),pad=parseFloat(getComputedStyle(nav).getPropertyValue("--tb-pad"))||6,w=(r.width-2*pad)/4;return {r,pad,w}}
 function tdHov(i){tdTabs().forEach((t,k)=>t.classList.toggle("hov",k===i))}
-function tdEnd(nav,i,go){nav.classList.remove("drag");nav.style.removeProperty("--tb-x");tdHov(-1);
+function tdEnd(nav,i,go){nav.classList.remove("drag");tdLift(nav,false);nav.style.removeProperty("--tb-x");tdHov(-1);
  if(i==null){nav.style.removeProperty("--tb-i");return}
  nav.style.setProperty("--tb-i",i);const t=tdTabs()[i];
  if(go&&t){const h=t.getAttribute("href");if(location.hash!==h&&!(h==="#/"&&(location.hash===""||location.hash==="#")))location.hash=h}
  setTimeout(()=>{if(!td)nav.style.removeProperty("--tb-i")},700)}
-function tdReset(nav){if(!td)return;const was=td.on;try{nav.hasPointerCapture(td.id)&&nav.releasePointerCapture(td.id)}catch{}td=null;if(was)tdEnd(nav,null,false)}
+// b15 glass v4: lift = pressed bead (x1.2, clearer, copy magnified); squash/stretch from drag velocity (none under Reduce Motion)
+function tdLift(nav,on){nav.classList.toggle("lift",on);if(!on)tdSquash(nav,0)}
+function tdSquash(nav,v){const b=nav.querySelector(".tb-body");if(!b)return;const sx=RM.matches?1:1+Math.min(.25,Math.abs(v)*.12);b.style.setProperty("--sx",sx);b.style.setProperty("--sy",RM.matches?1:1/sx**.6)}
+// lens maps (Chromium only, feature-detected): rounded-rect normal map, R,G = .5-.5*s*n (sample inward); "rim" = edge band s=(1-d/band)^2, "dome" = whole convex bead
+const LG=!!(navigator.userAgentData&&window.CSS&&CSS.supports("backdrop-filter","url(#lg-cap) blur(1px)"));
+function lgMap(W,H,r,band,mode){const c=document.createElement("canvas");c.width=W;c.height=H;const g=c.getContext("2d"),D=g.createImageData(W,H);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const px=x+.5,py=y+.5,ex=Math.abs(px-W/2)-(W/2-r),ey=Math.abs(py-H/2)-(H/2-r),qx=Math.max(ex,0),qy=Math.max(ey,0),ql=Math.hypot(qx,qy),
+  d=Math.max(0,r-ql-Math.max(0,Math.min(Math.max(ex,ey),0)));let nx=0,ny=0;
+  if(ql>0){nx=qx/ql*Math.sign(px-W/2);ny=qy/ql*Math.sign(py-H/2)}else if(W/2-Math.abs(px-W/2)<H/2-Math.abs(py-H/2))nx=Math.sign(px-W/2);else ny=Math.sign(py-H/2);
+  const s=d<band?(1-d/band)**2:0;let ax=nx*s,ay=ny*s;if(mode==="dome"){ax=(px-W/2)/(W/2)*.55+nx*s*.45;ay=(py-H/2)/(H/2)*.55+ny*s*.45}
+  const k=(y*W+x)*4;D.data[k]=128-127*ax;D.data[k+1]=128-127*ay;D.data[k+2]=Math.round(255*s);D.data[k+3]=255}
+ g.putImageData(D,0,0);return c.toDataURL()}
+function lgSet(id,W,H,url){const f=document.getElementById(id);if(!f)return;const im=f.querySelector("feImage");for(const e of[f,im]){e.setAttribute("width",W);e.setAttribute("height",H)}im.setAttribute("href",url)}
+function tbLayout(nav){const r=nav.getBoundingClientRect();if(!r.width)return;const pad=parseFloat(getComputedStyle(nav).getPropertyValue("--tb-pad"))||6,w=(r.width-2*pad)/4,h=r.height-2*pad;
+ nav.style.setProperty("--w",w+"px");nav.style.setProperty("--h",h+"px");
+ if(LG){const W=Math.round(r.width),H=Math.round(r.height),k=W+"x"+H;if(nav.__lg===k)return;nav.__lg=k;lgSet("lg-cap",W,H,lgMap(W,H,32,18,"rim"));lgSet("lg-bead",Math.round(w),Math.round(h),lgMap(Math.round(w),Math.round(h),26,12,"dome"))}}
+// magnified copy inside the bead (aria-hidden, no links/ids); badge mirrored from #pcnt
+function tbMag(nav){const m=nav.querySelector(".tb-mag");if(!m)return;m.innerHTML="";for(const a of tdTabs()){const s=document.createElement("span");s.className="tb-mt";s.innerHTML=a.innerHTML;s.querySelectorAll("[id]").forEach(x=>x.removeAttribute("id"));m.appendChild(s)}
+ const src=$("#pcnt"),cp=m.querySelector(".cnt");if(!src||!cp)return;const sync=()=>{cp.hidden=src.hidden;cp.textContent=src.textContent};sync();new MutationObserver(sync).observe(src,{attributes:true,childList:true,characterData:true,subtree:true})}
+function tdReset(nav){if(!td)return;const was=td.on;tdLift(nav,false);try{nav.hasPointerCapture(td.id)&&nav.releasePointerCapture(td.id)}catch{}td=null;if(was)tdEnd(nav,null,false)}
 (()=>{const nav=document.querySelector(".tb");if(!nav)return;
+ if(LG)document.documentElement.classList.add("lg-svg");tbMag(nav);tbLayout(nav);addEventListener("resize",()=>tbLayout(nav));if(window.ResizeObserver)new ResizeObserver(()=>tbLayout(nav)).observe(nav);
  nav.addEventListener("pointerdown",e=>{if(td){tdReset(nav);td={dead:true,id:-1};return}
   if(e.button!==0||!e.isPrimary||$("#overlay").innerHTML||$("#sheet").innerHTML||document.body.classList.contains("locked"))return;
-  nav.__tdClick=false;td={id:e.pointerId,x0:e.clientX,y0:e.clientY,on:false,s:[[e.timeStamp,e.clientX,0]],i0:tdCur()}});
+  nav.__tdClick=false;td={id:e.pointerId,x0:e.clientX,y0:e.clientY,on:false,s:[[e.timeStamp,e.clientX,0]],i0:tdCur()};tbLayout(nav);tdLift(nav,true)});
  nav.addEventListener("pointermove",e=>{if(!td||td.dead||e.pointerId!==td.id)return;const dx=e.clientX-td.x0,dy=e.clientY-td.y0;
   if(!td.on){if(Math.abs(dx)<TD.SLOP&&Math.abs(dy)<TD.SLOP)return;
-   if(Math.abs(dy)>Math.abs(dx)){td=null;return}
+   if(Math.abs(dy)>Math.abs(dx)){td=null;tdLift(nav,false);return}
    td.on=true;try{nav.setPointerCapture(e.pointerId)}catch{}nav.classList.add("drag")}
   const g=tdGeo(nav),x=Math.min(Math.max(e.clientX-g.r.left-g.pad-g.w/2,0),3*g.w);
   nav.style.setProperty("--tb-x",x+"px");tdHov(Math.round(x/g.w));td.x=x;td.w=g.w;
-  td.s.push([e.timeStamp,e.clientX,1]);if(td.s.length>64)td.s.splice(1,1)});
+  {const p=td.s[td.s.length-1];tdSquash(nav,(e.clientX-p[1])/Math.max(8,e.timeStamp-p[0]))}td.s.push([e.timeStamp,e.clientX,1]);if(td.s.length>64)td.s.splice(1,1)});
  nav.addEventListener("pointerup",e=>{if(!td)return;if(td.dead){td=null;return}if(e.pointerId!==td.id)return;const d=td;td=null;
   try{nav.hasPointerCapture(e.pointerId)&&nav.releasePointerCapture(e.pointerId)}catch{}
-  if(!d.on)return;
+  if(!d.on)return tdLift(nav,false);
   const f=d.x/d.w,dir=tdFlick(d.s,e.timeStamp,d.w);let i=Math.round(f);if(dir)i=dir>0?Math.floor(f+.001)+1:Math.ceil(f-.001)-1;
   i=Math.max(0,Math.min(3,i));nav.__tdClick=true;setTimeout(()=>nav.__tdClick=false,400);tdEnd(nav,i,true)});
  nav.addEventListener("pointercancel",()=>tdReset(nav));
  nav.addEventListener("lostpointercapture",e=>{if(td&&e.target===nav&&e.pointerId===td.id)tdReset(nav)});
  nav.addEventListener("click",e=>{if(nav.__tdClick){nav.__tdClick=false;e.preventDefault();e.stopPropagation()}},true);
- document.addEventListener("touchstart",e=>{if(e.touches.length>1&&td){if(td.on)tdReset(nav);else td=null}},{capture:true,passive:true});
+ document.addEventListener("touchstart",e=>{if(e.touches.length>1&&td){if(td.on)tdReset(nav);else{td=null;tdLift(nav,false)}}},{capture:true,passive:true});
  nav.addEventListener("contextmenu",e=>e.preventDefault())})();
 // ---- boot
 const SKEL=`<div class="top"><div class="lt"><h1>账本</h1></div></div><div class="wrap" id="skeleton" aria-busy="true" aria-label="加载中"><div class="sk" style="width:45%;height:34px;margin:8px 0 16px"></div><div class="sk" style="height:150px;border-radius:12px"></div><div class="sk" style="height:52px;margin-top:12px;border-radius:12px"></div><div class="sk" style="width:30%;height:13px;margin:24px 0 8px"></div>${'<div class="sk" style="height:60px;margin-top:2px;border-radius:12px"></div>'.repeat(5)}</div>`;

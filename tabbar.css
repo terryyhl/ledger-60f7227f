@@ -1,42 +1,74 @@
-:root{--t-sf:rgb(249,249,249);--t-ink:var(--ink);--t-ac:var(--blue);--tb-a:86%;
- --tb-tx:color-mix(in srgb,var(--sub),var(--ink) 35%);--tb-act:color-mix(in srgb,var(--blue),var(--ink) 35%);--tb-red:color-mix(in srgb,var(--red),#000 13%)}
-@media (prefers-color-scheme:dark){:root{--t-sf:rgb(22,22,22);--tb-a:86%;
- --tb-tx:color-mix(in srgb,var(--sub),var(--ink) 15%);--tb-act:color-mix(in srgb,var(--blue),var(--ink) 37%);--tb-red:color-mix(in srgb,var(--red),#000 15%)}}
-/* uses live app.css vars: --ink --sub --blue --red (b12). --t-sf = rgb part of live --tabbar. No data-theme. */
-/* b13g: nav keeps .tabbar (lock/hide hooks); .tabbar.tb outranks the old app.css bar */
-.tabbar.tb{border-top:0;padding-bottom:var(--tb-pad);display:grid;--tb-pad:6px;position:fixed;z-index:20;left:0;right:0;margin-inline:auto;width:min(360px,calc(100% - max(16px,env(safe-area-inset-left)) - max(16px,env(safe-area-inset-right))));bottom:max(12px,env(safe-area-inset-bottom));height:64px;box-sizing:border-box;padding:var(--tb-pad);border-radius:32px;grid-template-columns:repeat(4,1fr);
- background:color-mix(in srgb,var(--t-sf) var(--tb-a),transparent);
- -webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);
- box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 70%,transparent),inset 0 0 0 .5px color-mix(in srgb,#fff 35%,transparent),
-  0 0 0 .5px color-mix(in srgb,var(--t-ink) 14%,transparent),0 12px 32px -10px color-mix(in srgb,var(--t-ink) 35%,transparent)}
-@media (prefers-color-scheme:dark){.tabbar.tb{box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 18%,transparent),inset 0 0 0 .5px color-mix(in srgb,#fff 10%,transparent),0 0 0 .5px #000,0 14px 34px -10px #000}}
-.tb::before{content:"";position:absolute;top:var(--tb-pad);bottom:var(--tb-pad);left:var(--tb-pad);width:calc((100% - 2*var(--tb-pad))/4);border-radius:26px;
- background:linear-gradient(180deg,color-mix(in srgb,#fff 22%,transparent),transparent 60%),color-mix(in srgb,var(--t-ac) 16%,transparent);
- box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 75%,transparent),inset 0 -1px 0 color-mix(in srgb,var(--t-ink) 8%,transparent),0 4px 12px -6px color-mix(in srgb,var(--t-ac) 55%,transparent);
- transform:translateX(calc(var(--tb-i,0)*100%));transition:transform .5s cubic-bezier(.3,1.35,.5,1)}
-@media (prefers-color-scheme:dark){.tb::before{background:linear-gradient(180deg,color-mix(in srgb,#fff 10%,transparent),transparent 60%),color-mix(in srgb,var(--t-ac) 16%,transparent);box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 22%,transparent),0 4px 12px -6px #000}}
-.tb:has(.tab:nth-child(2).on){--tb-i:1}.tb:has(.tab:nth-child(3).on){--tb-i:2}.tb:has(.tab:nth-child(4).on){--tb-i:3}
-.tb .tab{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;font-weight:600;letter-spacing:.01em;color:var(--tb-tx);text-decoration:none;border-radius:26px;-webkit-tap-highlight-color:transparent}
-.tb .tab.on{color:var(--tb-act)}
-.tb .tab svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;transition:transform .35s cubic-bezier(.3,1.35,.5,1)}
-.tb .tab .f{fill:currentColor;stroke:none;opacity:.16}.tb .tab.on .f{opacity:.3}
-.tb .tab.on svg{transform:scale(1.06)}
+/* b15: Liquid-glass tab bar v4 "thick glass" (design: tabbar-glass-v4). b12 palette: --ink --sub --blue --red; --t-sf = rgb part of live --tabbar. */
+:root{--t-sf:rgb(249,249,249);--t-ink:var(--ink);--tb-a:86%;
+ --tb-tx:color-mix(in srgb,var(--sub),var(--ink) 41%);--tb-act:color-mix(in srgb,var(--blue),var(--ink) 34%);--tb-red:color-mix(in srgb,var(--red),#000 13%);
+ --tb-hl:30%;--tb-pg:25%;--tb-bead:color-mix(in srgb,var(--t-sf),#000 7%);
+ --tb-rim:rgb(255 255 255/.95);--tb-rim2:rgb(255 255 255/.45);--tb-dk:rgb(0 0 0/.16);--tb-sh:rgb(0 0 0/.30);--tb-amb:rgb(0 40 120/.16)}
+@media (prefers-color-scheme:dark){:root{--t-sf:rgb(22,22,22);
+ --tb-tx:color-mix(in srgb,var(--sub),var(--ink) 60%);--tb-act:color-mix(in srgb,var(--blue),var(--ink) 67%);--tb-red:color-mix(in srgb,var(--red),#000 15%);
+ --tb-hl:8%;--tb-pg:5%;--tb-bead:color-mix(in srgb,var(--t-sf),#fff 12%);
+ --tb-rim:rgb(255 255 255/.42);--tb-rim2:rgb(255 255 255/.14);--tb-dk:rgb(0 0 0/.55);--tb-sh:rgb(0 0 0/.75);--tb-amb:rgb(0 0 0/.5)}}
+/* nav keeps .tabbar (lock/hide hooks); .tabbar.tb outranks the old app.css bar. The nav itself has no filter/backdrop so the bead's backdrop still sees the page. */
+.tabbar.tb{--tb-pad:6px;--w:84px;--h:52px;--k:1;--x:var(--tb-x,calc(var(--tb-i,0)*var(--w)));
+ position:fixed;z-index:20;left:0;right:0;margin-inline:auto;display:grid;grid-template-columns:repeat(4,1fr);
+ width:min(360px,calc(100% - max(16px,env(safe-area-inset-left)) - max(16px,env(safe-area-inset-right))));
+ bottom:max(12px,env(safe-area-inset-bottom));height:64px;box-sizing:border-box;padding:var(--tb-pad);border-radius:32px;border-top:0;
+ background:none;-webkit-backdrop-filter:none;backdrop-filter:none;touch-action:none;overscroll-behavior:contain;-webkit-user-select:none;user-select:none}
+.tb:has(a.tab:nth-of-type(2).on){--tb-i:1}.tb:has(a.tab:nth-of-type(3).on){--tb-i:2}.tb:has(a.tab:nth-of-type(4).on){--tb-i:3}
+/* capsule glass (sibling layer): double bevel (top white + bottom dark + hairline) and 3-layer float shadow (contact + drop + ambient) */
+.tb-glass{position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+ background:linear-gradient(180deg,color-mix(in srgb,#fff var(--tb-hl),transparent) 0,transparent 46%),color-mix(in srgb,var(--t-sf) 35%,transparent);
+ -webkit-backdrop-filter:blur(8px) saturate(190%) brightness(1.05);backdrop-filter:blur(8px) saturate(190%) brightness(1.05);
+ box-shadow:inset 0 1.5px 0 var(--tb-rim),inset 0 -1px 0 var(--tb-rim2),inset 0 0 0 .5px var(--tb-rim2),
+  inset 0 -9px 14px -10px var(--tb-dk),inset 0 6px 10px -8px rgb(255 255 255/.5),
+  0 0 0 .5px color-mix(in srgb,var(--ink) 14%,transparent),0 2px 5px -1px var(--tb-sh),0 18px 36px -14px var(--tb-sh),0 10px 44px 4px var(--tb-amb)}
+.tb-glass::before{content:"";position:absolute;inset:9px;border-radius:23px;background:color-mix(in srgb,var(--t-sf) 78%,transparent);filter:blur(4px)}
+.tb-glass::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.5px;
+ background:linear-gradient(120deg,var(--tb-rim) 0,transparent 20%,transparent 70%,var(--tb-rim) 100%);
+ -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+/* Chromium (feature-detected, html.lg-svg): SVG displacement refraction at the rim */
+html.lg-svg .tb-glass{-webkit-backdrop-filter:url(#lg-cap) blur(3px) saturate(190%) brightness(1.05);backdrop-filter:url(#lg-cap) blur(3px) saturate(190%) brightness(1.05)}
+/* Safari/WebKit/Firefox: no url() in backdrop-filter -> wide gradient band + heavier blur */
+html:not(.lg-svg) .tb-glass{background:linear-gradient(180deg,color-mix(in srgb,#fff var(--tb-hl),transparent) 0,transparent 46%),color-mix(in srgb,var(--t-sf) 55%,transparent);-webkit-backdrop-filter:blur(20px) saturate(220%) brightness(1.05);backdrop-filter:blur(20px) saturate(220%) brightness(1.05)}
+html:not(.lg-svg) .tb-glass::after{padding:9px;
+ background:linear-gradient(180deg,rgb(255 255 255/.75) 0,rgb(255 255 255/.18) 35%,transparent 55%,var(--tb-dk) 100%),
+  linear-gradient(120deg,var(--tb-rim) 0,transparent 25%,transparent 70%,var(--tb-rim2) 100%);filter:blur(1.5px)}
+/* tabs */
+.tb .tab{position:relative;z-index:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;font-weight:600;letter-spacing:.01em;color:var(--tb-tx);text-decoration:none;border-radius:26px;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.tb .tab.on,.tb .tb-mt{color:var(--tb-act)}
+.tb svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tb .tab svg{transition:transform .35s cubic-bezier(.3,1.35,.5,1)}
+.tb .f{fill:currentColor;stroke:none;opacity:.16}.tb .on .f,.tb .tb-mt .f{opacity:.3}
 .tb .tab:focus-visible{outline:2px solid var(--tb-act);outline-offset:-4px}
 .tb .cnt{position:absolute;top:4px;left:calc(50% + 6px);min-width:17px;height:17px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:var(--tb-red);color:#fff;font-size:11px;font-style:normal;font-weight:700;display:grid;place-items:center}
 .tb .cnt[hidden]{display:none}
-/* opaque fallbacks */
-@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.tabbar.tb{background:var(--t-sf)}}
-@media (prefers-reduced-transparency:reduce){.tabbar.tb{background:var(--t-sf);-webkit-backdrop-filter:none;backdrop-filter:none}.tb::before{background:color-mix(in srgb,var(--t-ac) 16%,var(--t-sf))}}
-@media (prefers-reduced-motion:reduce){.tb::before,.tb .tab svg{transition:none}.tb .tab.on svg{transform:none}}
+/* selected bead: own convex glass (translate) > body (lift + squash) > magnified aria-hidden copy of the labels */
+.tb-bead{position:absolute;z-index:2;top:var(--tb-pad);left:var(--tb-pad);bottom:var(--tb-pad);width:calc((100% - 2*var(--tb-pad))/4);pointer-events:none;
+ transform:translateX(var(--x));transition:transform .5s cubic-bezier(.3,1.4,.5,1)}
+.tb-body{position:absolute;inset:0;border-radius:26px;overflow:hidden;--sx:1;--sy:1;--L:1;transform:scale(calc(var(--L)*var(--sx)),calc(var(--L)*var(--sy)));
+ transition:transform .45s cubic-bezier(.3,1.5,.5,1);
+ background:radial-gradient(120% 100% at 50% 45%,color-mix(in srgb,var(--tb-bead) 90%,transparent) 55%,color-mix(in srgb,var(--tb-bead) 50%,transparent) 100%);
+ box-shadow:inset 0 1.5px 0 var(--tb-rim),inset 0 -1px 0 var(--tb-rim2),inset 0 0 0 .5px var(--tb-rim2),inset 0 -6px 9px -7px var(--tb-dk),0 3px 8px -4px var(--tb-sh)}
+.tb-body::after{content:"";position:absolute;inset:0;border-radius:inherit;z-index:2;opacity:.9;
+ background:radial-gradient(70% 45% at 50% 0,color-mix(in srgb,#fff var(--tb-pg),transparent),transparent 75%),linear-gradient(110deg,transparent 30%,color-mix(in srgb,#fff calc(var(--tb-pg)*.6),transparent) 45%,transparent 58%)}
+html.lg-svg .tb-body{-webkit-backdrop-filter:url(#lg-bead) saturate(160%);backdrop-filter:url(#lg-bead) saturate(160%)}
+html:not(.lg-svg) .tb-body{-webkit-backdrop-filter:blur(6px) saturate(200%);backdrop-filter:blur(6px) saturate(200%)}
+.tb-mag{position:absolute;left:0;top:0;width:calc(var(--w)*4);height:var(--h);display:grid;grid-template-columns:repeat(4,1fr);transform-origin:0 0;z-index:1;
+ transform:translate(calc(var(--w)/2 - var(--k)*(var(--x) + var(--w)/2)),calc(var(--h)/2*(1 - var(--k)))) scale(var(--k));transition:transform .5s cubic-bezier(.3,1.4,.5,1)}
+.tb-mt{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;font-weight:600;letter-spacing:.01em}
+/* lifted (pressed / dragging): bead grows to 1.2x past the capsule, clears up, the copy magnifies */
+.tb.lift{--k:1.1}
+.tb.lift .tb-body{--L:1.2;background:radial-gradient(120% 100% at 50% 45%,color-mix(in srgb,var(--tb-bead) 80%,transparent) 50%,color-mix(in srgb,var(--tb-bead) 25%,transparent) 100%)}
+.tb.drag .tb-bead,.tb.drag .tb-mag{transition:none}.tb.drag .tb-body{transition:transform .08s linear}
+.tb.drag .tab.hov svg{transform:scale(1.14)}
+/* ---- fallbacks ---- */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.tb-glass,html.lg-svg .tb-glass,html:not(.lg-svg) .tb-glass{background:linear-gradient(180deg,color-mix(in srgb,#fff var(--tb-hl),transparent) 0,transparent 46%),var(--t-sf)}.tb-body,html.lg-svg .tb-body,html:not(.lg-svg) .tb-body,.tb.lift .tb-body{background:var(--tb-bead)}}
+@media (prefers-reduced-transparency:reduce){
+ .tb-glass,html.lg-svg .tb-glass,html:not(.lg-svg) .tb-glass{background:var(--t-sf);-webkit-backdrop-filter:none;backdrop-filter:none}
+ .tb-glass::before,.tb-glass::after,.tb-body::after{display:none}
+ .tb-body,html.lg-svg .tb-body,html:not(.lg-svg) .tb-body,.tb.lift .tb-body{background:var(--tb-bead);-webkit-backdrop-filter:none;backdrop-filter:none}}
+@media (prefers-reduced-motion:reduce){.tb-bead,.tb-body,.tb-mag,.tb .tab svg{transition:none!important}.tb-body{--sx:1!important;--sy:1!important}.tb.lift .tb-body{--L:1}.tb.lift .tb-mag{--k:1}.tb.drag .tab.hov svg{transform:none}}
 /* content clearance: bar top = max(12px,safe-bottom)+64px; +16px breathing room */
 body{padding-bottom:calc(80px + max(12px,env(safe-area-inset-bottom)))}
 body.locked{padding-bottom:0}
 #toast{bottom:calc(88px + max(12px,env(safe-area-inset-bottom)))}
 body.two-pane #pane{bottom:0;padding-bottom:calc(80px + max(12px,env(safe-area-inset-bottom)))}
-.tb .tab{min-height:0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
-
-/* b14: drag */
-.tabbar.tb{touch-action:none;overscroll-behavior:contain}
-.tb.drag::before{transition:none;transform:translateX(var(--tb-x,0))}
-.tb.drag .tab.hov{color:var(--tb-act)}.tb.drag .tab.hov svg{transform:scale(1.14)}
-@media (prefers-reduced-motion:reduce){.tb.drag .tab.hov svg{transform:none}}
