@@ -273,6 +273,8 @@ a.card.rev-line{display:flex;align-items:center;gap:10px;min-height:44px;padding
    touch-action:manipulation kills double-tap zoom (pan + PTR + horizontal swipes unaffected); the receipt viewer stage keeps touch-action:none and its own zoom. */
 html{touch-action:manipulation}
 a,img,button,[role="button"],svg{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
+/* b16 B10-02: amounts never raise the iOS select/copy callout on long-press (amount elements only; other text unchanged) */
+.num,.amt,.big{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 input,textarea,[contenteditable],[contenteditable] *,[data-f="note"]{-webkit-touch-callout:default;-webkit-user-select:text;user-select:text}
 /* b12: pull-down dismiss — header drags never scroll the page; sheet content never chains its overscroll to the page behind. */
 #overlay .sheet .grab,#overlay .sheet .navbar{touch-action:none}#overlay .sheet .body{overscroll-behavior-y:contain}

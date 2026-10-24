@@ -445,7 +445,7 @@ const SPF={};let spN=0;
 const spFrag=k=>SPF[k]||(SPF[k]=fetch("sp/"+k+".svg").then(r=>{if(!r.ok)throw 0;return r.text()}).catch(e=>{delete SPF[k];throw e}));
 const spNum=t=>{const n=++spN;return t.split("sp-clip-@").join("sp-clip-"+n)};
 // SPWX: seasonal weather (sp-weather, sapling-v5.1-motion.css) on/off, independent of sway
-let SPWX=true;
+let SPWX=(()=>{try{return localStorage.getItem("ledger.sapling.wx")!=="0"}catch{return true}})();   // b16: settings toggle #sp-wx; localStorage holds only "1"/"0"
 const spSvg=(g,o={})=>`<svg class="sp-svg${o.live?" sp-live"+(SPWX?" sp-wx":""):""}" viewBox="0 0 240 240" width="${o.s||76}" height="${o.s||76}" role="img" aria-label="${mlabel(g.ym)}的树：Lv.${g.level} ${g.stage}" data-spk="${spKey(g)}"${o.live?' data-live="1"':""}></svg>`;
 function spSprite(){let s=$("#sp-sprite");if(!s){s=document.createElementNS("http://www.w3.org/2000/svg","svg");s.id="sp-sprite";s.setAttribute("class","sp-svg");s.setAttribute("aria-hidden","true");s.style.cssText="position:absolute;width:0;height:0;overflow:hidden";document.body.appendChild(s)}return s}
 function spHydrate(){document.querySelectorAll("#app svg[data-spk]:not([data-spok]),#overlay svg[data-spk]:not([data-spok])").forEach(s=>{const k=s.dataset.spk;s.dataset.spok="0";spFrag(k).then(t=>{if(!s.isConnected||!KEYOK())return;
@@ -474,7 +474,7 @@ const spRange=()=>{const ms=[...new Set(E.filter(r=>r.type==="expense").map(r=>r
 const backHome=`<a class="nb" href="#/"><span class="chev" style="transform:rotate(-135deg) scale(.8);border-color:var(--blue)"></span>首页</a>`;
 function saplingP(){const ym=spMP(),[lo,hi]=spRange(),g=sapling(ym),alt=g&&sapling(ym,!SPHK);
  const sw=`<div class="period" style="display:flex;align-items:center;justify-content:space-between;margin:4px -8px 0"><a class="nb pbtn" style="font-size:24px;text-decoration:none" id="sp-prev" ${ym>lo?`href="#/sapling?m=${shiftYM(ym,-1)}"`:'aria-disabled="true"'} aria-label="上个月">‹</a><b id="sp-t">${mlabel(ym)}</b><a class="nb pbtn" style="font-size:24px;text-decoration:none" id="sp-next" ${ym<hi?`href="#/sapling?m=${shiftYM(ym,1)}"`:'aria-disabled="true"'} aria-label="下个月">›</a></div>`;
- const tog=`<div class="group"><button class="row sp-row" role="switch" id="sp-hk" aria-checked="${SPHK}"><span class="m">家政计入养料</span><span class="sw${SPHK?" on":""}" aria-hidden="true"></span></button></div><p class="foot sub">只影响家政；订阅等其他固定支出始终计入。基准 M 也随之切换口径。</p>`;
+ const tog=`<div class="group"><button class="row sp-row" role="switch" id="sp-hk" aria-checked="${SPHK}"><span class="m">家政计入养料</span><span class="sw${SPHK?" on":""}" aria-hidden="true"></span></button></div><p class="foot sub" id="sp-hk-note">只影响家政；订阅等其他固定支出始终计入。基准 M 也随之切换口径。</p><div class="group"><button class="row sp-row" role="switch" id="sp-wx" aria-checked="${SPWX}"><span class="m">季节天气动画</span><span class="sw${SPWX?" on":""}" aria-hidden="true"></span></button></div>`;
  const forest=`<div class="group"><a class="row" href="#/forest?y=${ym.slice(0,4)}" id="sp-forest"><span class="m p">${ym.slice(0,4)}年的森林</span><span class="chev"></span></a></div>`;
  if(!g)return navbar("树苗",backHome)+`<div class="wrap">${sw}${empty('<span style="font-size:30px">🌱</span>',"这个月没有记录","有支出记录的月份才会长出一棵树。")}${tog}${forest}</div>`;
  const at=[["高度",g.height_cm+" cm"],["叶片",g.leaves],["花",g.flowers],["果实",g.fruits],["养料进度",g.nutrient_pct+"%"],["溢出",g.overflow]];
@@ -489,6 +489,7 @@ function forest(){const y=spYP(),[lo,hi]=spRange(),ylo=lo.slice(0,4),yhi=hi.slic
  const sw=`<div class="period" style="display:flex;align-items:center;justify-content:space-between;margin:4px -8px 0"><a class="nb pbtn" style="font-size:24px;text-decoration:none" id="fo-prev" ${y>ylo?`href="#/forest?y=${+y-1}"`:'aria-disabled="true"'} aria-label="上一年">‹</a><b id="fo-t">${y}年</b><a class="nb pbtn" style="font-size:24px;text-decoration:none" id="fo-next" ${y<yhi?`href="#/forest?y=${+y+1}"`:'aria-disabled="true"'} aria-label="下一年">›</a></div>`;
  const cells=[...Array(12)].map((_,i)=>{const ym=y+"-"+pad(i+1),g=sapling(ym);return g?`<a class="fo-c" href="#/sapling?m=${ym}" data-ym="${ym}" data-lv="${g.level}">${spSvg(g,{s:84})}<span class="num">${i+1}月</span><small class="sub">Lv.${g.level}</small></a>`:`<div class="fo-c fo-e" data-ym="${ym}" aria-label="${i+1}月 没有记录"><span class="fo-dot" aria-hidden="true"></span><span class="num">${i+1}月</span><small class="sub">—</small></div>`});
  return navbar("森林",`<a class="nb" href="#/sapling"><span class="chev" style="transform:rotate(-135deg) scale(.8);border-color:var(--blue)"></span>树苗</a>`)+`<div class="wrap">${sw}<div class="fo-g" id="forest">${cells.join("")}</div><p class="foot sub">只有有记录的月份才有树。</p></div>`}
+document.addEventListener("click",e=>{if(!e.target.closest("#sp-wx"))return;SPWX=!SPWX;try{localStorage.setItem("ledger.sapling.wx",SPWX?"1":"0")}catch{}const y=scrollY;render();scrollTo(0,y)});
 document.addEventListener("click",e=>{const b=e.target.closest("#sp-hk");if(!b)return;SPHK=!SPHK;try{localStorage.setItem("ledger.sapling.hk",SPHK?"1":"0")}catch{}const y=scrollY;render();scrollTo(0,y)});
 // ---- b10 每周点评: reviews.enc.json written by 记账管家 (no AI / external calls here). undefined = loading, null = missing/unreadable → no card.
 // All review text is set with textContent after render (never through innerHTML).
@@ -658,16 +659,19 @@ document.addEventListener("touchcancel",()=>{ptrArm(false);if(tx&&tx.axis==="ptr
 // a flick (velocity from samples in the last 100ms only, as b12) goes one tab in its direction. <8px movement = tap (native click). Vertical-first moves are not captured. 2nd pointer / cancel / lost capture -> reset.
 const TD={SLOP:8,FLICK:.45,WIN:100,MINS:3,MIND:24,MINF:.3};let td=null;
 // pure flick test: s=[[t,x,isMove]...] (s[0]=pointerdown), tUp=release time, w=tab width -> -1|0|1. Needs: last sample <=100ms before release, >=3 move samples
-// in that window, |x_last-x_down| >= max(24px, .3*w), and |v| >= .45px/ms where v uses only the samples inside the 100ms window.
+// in that window, |v| >= .45px/ms where v (and so the direction) uses only the samples inside the 100ms window, and the displacement in that direction,
+// since pointerdown or inside the window (b16), >= max(24px, .3*w).
 function tdFlick(s,tUp,w){if(!s||s.length<2)return 0;const last=s[s.length-1];if(tUp-last[0]>TD.WIN)return 0;
  const win=s.filter(q=>tUp-q[0]<=TD.WIN);if(win.filter(q=>q[2]).length<TD.MINS)return 0;
- const dist=last[1]-s[0][1];if(Math.abs(dist)<Math.max(TD.MIND,TD.MINF*w))return 0;
- const a=win[0],dt=last[0]-a[0];if(dt<=0)return 0;const v=(last[1]-a[1])/dt;return Math.abs(v)>=TD.FLICK&&Math.sign(v)===Math.sign(dist)?Math.sign(v):0}
+ // b16: direction comes from the samples inside the last 100ms (not from pointerdown), so a slow drag then a quick flick back counts.
+ // Distance: the displacement in that direction either since pointerdown (b14 rule, unchanged) or inside the window must reach max(24px,.3w).
+ const a=win[0],dt=last[0]-a[0];if(dt<=0)return 0;const wd=last[1]-a[1],v=wd/dt,dir=Math.sign(v),need=Math.max(TD.MIND,TD.MINF*w);
+ if(!dir||Math.abs(v)<TD.FLICK)return 0;return (last[1]-s[0][1])*dir>=need||wd*dir>=need?dir:0}
 function tdTabs(){return [...document.querySelectorAll(".tb a.tab")]}
 function tdCur(){const t=tdTabs();return Math.max(0,t.findIndex(x=>x.classList.contains("on")))}
 function tdGeo(nav){const r=nav.getBoundingClientRect(),pad=parseFloat(getComputedStyle(nav).getPropertyValue("--tb-pad"))||6,w=(r.width-2*pad)/4;return {r,pad,w}}
 function tdHov(i){tdTabs().forEach((t,k)=>t.classList.toggle("hov",k===i))}
-function tdEnd(nav,i,go){nav.classList.remove("drag");tdLift(nav,false);nav.style.removeProperty("--tb-x");tdHov(-1);
+function tdEnd(nav,i,go){nav.classList.remove("drag");tdLift(nav,false);nav.style.removeProperty("--tb-x");nav.style.removeProperty("--mx");tdHov(-1);
  if(i==null){nav.style.removeProperty("--tb-i");return}
  nav.style.setProperty("--tb-i",i);const t=tdTabs()[i];
  if(go&&t){const h=t.getAttribute("href");if(location.hash!==h&&!(h==="#/"&&(location.hash===""||location.hash==="#")))location.hash=h}
@@ -689,7 +693,7 @@ function tbLayout(nav){const r=nav.getBoundingClientRect();if(!r.width)return;co
  nav.style.setProperty("--w",w+"px");nav.style.setProperty("--h",h+"px");
  if(LG){const W=Math.round(r.width),H=Math.round(r.height),k=W+"x"+H;if(nav.__lg===k)return;nav.__lg=k;lgSet("lg-cap",W,H,lgMap(W,H,32,18,"rim"));lgSet("lg-bead",Math.round(w),Math.round(h),lgMap(Math.round(w),Math.round(h),26,12,"dome"))}}
 // magnified copy inside the bead (aria-hidden, no links/ids); badge mirrored from #pcnt
-function tbMag(nav){const m=nav.querySelector(".tb-mag");if(!m)return;m.innerHTML="";for(const a of tdTabs()){const s=document.createElement("span");s.className="tb-mt";s.innerHTML=a.innerHTML;s.querySelectorAll("[id]").forEach(x=>x.removeAttribute("id"));m.appendChild(s)}
+function tbMag(nav){const m=nav.querySelector(".tb-mag");if(!m)return;m.innerHTML="";for(const a of tdTabs()){const s=document.createElement("span");s.className="tb-mt";s.innerHTML=a.innerHTML;s.querySelectorAll("[id]").forEach(x=>x.removeAttribute("id"));m.appendChild(s)}nav.classList.add("mag-ok");
  const src=$("#pcnt"),cp=m.querySelector(".cnt");if(!src||!cp)return;const sync=()=>{cp.hidden=src.hidden;cp.textContent=src.textContent};sync();new MutationObserver(sync).observe(src,{attributes:true,childList:true,characterData:true,subtree:true})}
 function tdReset(nav){if(!td)return;const was=td.on;tdLift(nav,false);try{nav.hasPointerCapture(td.id)&&nav.releasePointerCapture(td.id)}catch{}td=null;if(was)tdEnd(nav,null,false)}
 (()=>{const nav=document.querySelector(".tb");if(!nav)return;
@@ -702,7 +706,7 @@ function tdReset(nav){if(!td)return;const was=td.on;tdLift(nav,false);try{nav.ha
    if(Math.abs(dy)>Math.abs(dx)){td=null;tdLift(nav,false);return}
    td.on=true;try{nav.setPointerCapture(e.pointerId)}catch{}nav.classList.add("drag")}
   const g=tdGeo(nav),x=Math.min(Math.max(e.clientX-g.r.left-g.pad-g.w/2,0),3*g.w);
-  nav.style.setProperty("--tb-x",x+"px");tdHov(Math.round(x/g.w));td.x=x;td.w=g.w;
+  nav.style.setProperty("--tb-x",x+"px");const hi=Math.max(0,Math.min(3,Math.round(x/g.w)));tdHov(hi);nav.style.setProperty("--mx",hi*g.w+"px");td.x=x;td.w=g.w;
   {const p=td.s[td.s.length-1];tdSquash(nav,(e.clientX-p[1])/Math.max(8,e.timeStamp-p[0]))}td.s.push([e.timeStamp,e.clientX,1]);if(td.s.length>64)td.s.splice(1,1)});
  nav.addEventListener("pointerup",e=>{if(!td)return;if(td.dead){td=null;return}if(e.pointerId!==td.id)return;const d=td;td=null;
   try{nav.hasPointerCapture(e.pointerId)&&nav.releasePointerCapture(e.pointerId)}catch{}
@@ -713,6 +717,18 @@ function tdReset(nav){if(!td)return;const was=td.on;tdLift(nav,false);try{nav.ha
  nav.addEventListener("lostpointercapture",e=>{if(td&&e.target===nav&&e.pointerId===td.id)tdReset(nav)});
  nav.addEventListener("click",e=>{if(nav.__tdClick){nav.__tdClick=false;e.preventDefault();e.stopPropagation()}},true);
  document.addEventListener("touchstart",e=>{if(e.touches.length>1&&td){if(td.on)tdReset(nav);else{td=null;tdLift(nav,false)}}},{capture:true,passive:true});
+ // b16 P2-1: with touch-action:pan-y the browser may turn a drag that drifts upward into a page scroll (pointercancel). Non-passive touchmove on the bar:
+ // once a horizontal intent is seen (|dx|>=4px and |dx|>=|dy|, before the browser commits on its first moves) or the drag is on, preventDefault every move
+ // of that touch, so it stays our drag. Vertical-first moves are never prevented, so vertical swipes on the bar still scroll the page.
+ let tl=null;
+ nav.addEventListener("touchstart",e=>{const t=e.touches[0];tl=e.touches.length===1&&t?{id:t.identifier,x:t.clientX,y:t.clientY,lock:false,vert:false}:null},{passive:true});
+ nav.addEventListener("touchmove",e=>{if(!tl)return;const t=[...e.changedTouches].find(q=>q.identifier===tl.id);if(!t)return;
+  if(e.touches.length>1){tl=null;return}
+  const dx=Math.abs(t.clientX-tl.x),dy=Math.abs(t.clientY-tl.y);
+  if(!tl.lock&&!tl.vert){if(dx>=4&&dx>=dy)tl.lock=true;else if(dy>=4&&dy>dx)tl.vert=true}   // same tie rule as pointermove (|dy|>|dx| = vertical)
+  if(tl.lock&&!(td&&!td.dead)&&(dx>=TD.SLOP||dy>=TD.SLOP))tl.lock=false;   // our pointer logic gave up (vertical-first / reset): release
+  if((tl.lock||(td&&td.on))&&e.cancelable)e.preventDefault()},{passive:false});
+ nav.addEventListener("touchend",()=>{tl=null},{passive:true});nav.addEventListener("touchcancel",()=>{tl=null},{passive:true});
  nav.addEventListener("contextmenu",e=>e.preventDefault())})();
 // ---- boot
 const SKEL=`<div class="top"><div class="lt"><h1>账本</h1></div></div><div class="wrap" id="skeleton" aria-busy="true" aria-label="加载中"><div class="sk" style="width:45%;height:34px;margin:8px 0 16px"></div><div class="sk" style="height:150px;border-radius:12px"></div><div class="sk" style="height:52px;margin-top:12px;border-radius:12px"></div><div class="sk" style="width:30%;height:13px;margin:24px 0 8px"></div>${'<div class="sk" style="height:60px;margin-top:2px;border-radius:12px"></div>'.repeat(5)}</div>`;

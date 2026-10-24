@@ -1,10 +1,10 @@
 /* b15: Liquid-glass tab bar v4 "thick glass" (design: tabbar-glass-v4). b12 palette: --ink --sub --blue --red; --t-sf = rgb part of live --tabbar. */
 :root{--t-sf:rgb(249,249,249);--t-ink:var(--ink);--tb-a:86%;
- --tb-tx:color-mix(in srgb,var(--sub),var(--ink) 41%);--tb-act:color-mix(in srgb,var(--blue),var(--ink) 34%);--tb-red:color-mix(in srgb,var(--red),#000 13%);
+ --tb-tx:color-mix(in srgb,var(--sub),var(--ink) 46%);--tb-act:color-mix(in srgb,var(--blue),var(--ink) 34%);--tb-red:color-mix(in srgb,var(--red),#000 18%);
  --tb-hl:30%;--tb-pg:25%;--tb-bead:color-mix(in srgb,var(--t-sf),#000 7%);
  --tb-rim:rgb(255 255 255/.95);--tb-rim2:rgb(255 255 255/.45);--tb-dk:rgb(0 0 0/.16);--tb-sh:rgb(0 0 0/.30);--tb-amb:rgb(0 40 120/.16)}
 @media (prefers-color-scheme:dark){:root{--t-sf:rgb(22,22,22);
- --tb-tx:color-mix(in srgb,var(--sub),var(--ink) 60%);--tb-act:color-mix(in srgb,var(--blue),var(--ink) 67%);--tb-red:color-mix(in srgb,var(--red),#000 15%);
+ --tb-tx:color-mix(in srgb,var(--sub),var(--ink) 60%);--tb-act:color-mix(in srgb,var(--blue),var(--ink) 67%);--tb-red:color-mix(in srgb,var(--red),#000 18%);
  --tb-hl:8%;--tb-pg:5%;--tb-bead:color-mix(in srgb,var(--t-sf),#fff 12%);
  --tb-rim:rgb(255 255 255/.42);--tb-rim2:rgb(255 255 255/.14);--tb-dk:rgb(0 0 0/.55);--tb-sh:rgb(0 0 0/.75);--tb-amb:rgb(0 0 0/.5)}}
 /* nav keeps .tabbar (lock/hide hooks); .tabbar.tb outranks the old app.css bar. The nav itself has no filter/backdrop so the bead's backdrop still sees the page. */
@@ -12,7 +12,7 @@
  position:fixed;z-index:20;left:0;right:0;margin-inline:auto;display:grid;grid-template-columns:repeat(4,1fr);
  width:min(360px,calc(100% - max(16px,env(safe-area-inset-left)) - max(16px,env(safe-area-inset-right))));
  bottom:max(12px,env(safe-area-inset-bottom));height:64px;box-sizing:border-box;padding:var(--tb-pad);border-radius:32px;border-top:0;
- background:none;-webkit-backdrop-filter:none;backdrop-filter:none;touch-action:none;overscroll-behavior:contain;-webkit-user-select:none;user-select:none}
+ background:none;-webkit-backdrop-filter:none;backdrop-filter:none;touch-action:pan-y;overscroll-behavior:contain;-webkit-user-select:none;user-select:none}
 .tb:has(a.tab:nth-of-type(2).on){--tb-i:1}.tb:has(a.tab:nth-of-type(3).on){--tb-i:2}.tb:has(a.tab:nth-of-type(4).on){--tb-i:3}
 /* capsule glass (sibling layer): double bevel (top white + bottom dark + hairline) and 3-layer float shadow (contact + drop + ambient) */
 .tb-glass{position:absolute;inset:0;border-radius:inherit;pointer-events:none;
@@ -53,13 +53,17 @@ html:not(.lg-svg) .tb-glass::after{padding:9px;
 html.lg-svg .tb-body{-webkit-backdrop-filter:url(#lg-bead) saturate(160%);backdrop-filter:url(#lg-bead) saturate(160%)}
 html:not(.lg-svg) .tb-body{-webkit-backdrop-filter:blur(6px) saturate(200%);backdrop-filter:blur(6px) saturate(200%)}
 .tb-mag{position:absolute;left:0;top:0;width:calc(var(--w)*4);height:var(--h);display:grid;grid-template-columns:repeat(4,1fr);transform-origin:0 0;z-index:1;
- transform:translate(calc(var(--w)/2 - var(--k)*(var(--x) + var(--w)/2)),calc(var(--h)/2*(1 - var(--k)))) scale(var(--k));transition:transform .5s cubic-bezier(.3,1.4,.5,1)}
+ transform:translate(calc(var(--w)/2 - var(--k)*(var(--mx,var(--x)) + var(--w)/2)),calc(var(--h)/2*(1 - var(--k)))) scale(var(--k));transition:transform .5s cubic-bezier(.3,1.4,.5,1)}
 .tb-mt{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;font-weight:600;letter-spacing:.01em}
 /* lifted (pressed / dragging): bead grows to 1.2x past the capsule, clears up, the copy magnifies */
 .tb.lift{--k:1.1}
 .tb.lift .tb-body{--L:1.2;background:radial-gradient(120% 100% at 50% 45%,color-mix(in srgb,var(--tb-bead) 80%,transparent) 50%,color-mix(in srgb,var(--tb-bead) 25%,transparent) 100%)}
-.tb.drag .tb-bead,.tb.drag .tb-mag{transition:none}.tb.drag .tb-body{transition:transform .08s linear}
+.tb.drag .tb-bead{transition:none}.tb.drag .tb-mag{transition:transform .16s ease-out}.tb.drag .tb-body{transition:transform .08s linear}
 .tb.drag .tab.hov svg{transform:scale(1.14)}
+/* b16: the real selected tab sits under the bead and its blue icon was refracted into a ghost at the bead rim; the bead's magnified copy already shows it,
+   so hide the real one while the bead rests on it (only once tbMag has built the copy: .tb.mag-ok) */
+.tb.mag-ok:not(.drag) .tab.on>svg{opacity:0}.tb.mag-ok:not(.drag) .tab.on{-webkit-text-fill-color:transparent}.tb .tab .cnt{-webkit-text-fill-color:#fff}
+/* (the label is a bare text node: hidden with text-fill so the computed color / contrast checks still see --tb-act) */
 /* ---- fallbacks ---- */
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.tb-glass,html.lg-svg .tb-glass,html:not(.lg-svg) .tb-glass{background:linear-gradient(180deg,color-mix(in srgb,#fff var(--tb-hl),transparent) 0,transparent 46%),var(--t-sf)}.tb-body,html.lg-svg .tb-body,html:not(.lg-svg) .tb-body,.tb.lift .tb-body{background:var(--tb-bead)}}
 @media (prefers-reduced-transparency:reduce){
