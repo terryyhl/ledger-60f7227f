@@ -3,14 +3,9 @@
 <meta name="color-scheme" content="light dark"><meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="账本">
 <title>账本</title><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="icon" type="image/svg+xml" href="icons/icon.svg"><link rel="stylesheet" href="app.css"><link rel="stylesheet" href="extra.css"><link rel="stylesheet" href="sp/sapling-v5.1.css"><link rel="stylesheet" href="sp/sapling-v5.1-motion.css"></head><body>
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="icon" type="image/svg+xml" href="icons/icon.svg"><link rel="stylesheet" href="app.css"><link rel="stylesheet" href="extra.css"><link rel="stylesheet" href="tabbar.css"><link rel="stylesheet" href="sp/sapling-v5.1.css"><link rel="stylesheet" href="sp/sapling-v5.1-motion.css"></head><body>
 <div id="ptr" aria-hidden="true"><svg viewBox="0 0 28 28" width="28" height="28"><circle cx="14" cy="14" r="11" fill="none" stroke="var(--fill)" stroke-width="2.5"/><circle class="ring" cx="14" cy="14" r="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="69.1" stroke-dashoffset="69.1" transform="rotate(-90 14 14)"/></svg></div>
 <button id="newbar" hidden>有新账目，点此刷新</button>
 <div id="app"></div><aside id="pane" aria-label="账目详情"></aside><div id="sheet"></div><div id="overlay"></div><div id="toast" role="status" aria-live="polite"></div>
-<nav class="tabbar">
-<a class="tab" href="#/" data-r="home"><i class="ti-home"></i>首页</a>
-<a class="tab" href="#/list" data-r="list"><i class="ti-list"></i>明细</a>
-<a class="tab" href="#/fixed" data-r="fixed"><i class="ti-subs"><em class="cnt" id="pcnt" hidden></em></i>固定</a>
-<a class="tab" href="#/report" data-r="report"><i class="ti-chart"></i>报表</a>
-</nav>
+<nav class="tabbar tb" aria-label="标签栏"><a class="tab" href="#/" data-r="home"><svg viewBox="0 0 26 26" aria-hidden="true"><path class="f" d="M6 11.5 13 6l7 5.5V20H6z"/><path d="M4.5 12.5 13 5.5l8.5 7"/><path d="M6.5 11v9h13v-9"/><path d="M11 20v-5h4v5"/></svg>首页</a><a class="tab" href="#/list" data-r="list"><svg viewBox="0 0 26 26" aria-hidden="true"><rect class="f" x="5" y="5" width="16" height="16" rx="4"/><rect x="5" y="5" width="16" height="16" rx="4"/><path d="M9 10h8M9 13h8M9 16h5"/></svg>明细</a><a class="tab" href="#/fixed" data-r="fixed"><svg viewBox="0 0 26 26" aria-hidden="true"><rect class="f" x="5" y="7" width="16" height="14" rx="3.5"/><rect x="5" y="7" width="16" height="14" rx="3.5"/><path d="M9.5 5v4M16.5 5v4"/><path d="M16 14a3 3 0 1 1-1-2.2"/><path d="M15.3 10.6l.1 1.7-1.7.2"/></svg>固定<em class="cnt" id="pcnt" hidden></em></a><a class="tab" href="#/report" data-r="report"><svg viewBox="0 0 26 26" aria-hidden="true"><path class="f" d="M7 13h3v7H7zM11.5 9h3v11h-3zM16 6h3v14h-3z"/><path d="M7 13h3v7H7zM11.5 9h3v11h-3zM16 6h3v14h-3z"/><path d="M5 20.5h16"/></svg>报表</a></nav>
 <script src="app.js"></script></body></html>

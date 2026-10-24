@@ -1,0 +1,37 @@
+:root{--t-sf:rgb(249,249,249);--t-ink:var(--ink);--t-ac:var(--blue);--tb-a:86%;
+ --tb-tx:color-mix(in srgb,var(--sub),var(--ink) 35%);--tb-act:color-mix(in srgb,var(--blue),var(--ink) 35%);--tb-red:color-mix(in srgb,var(--red),#000 13%)}
+@media (prefers-color-scheme:dark){:root{--t-sf:rgb(22,22,22);--tb-a:86%;
+ --tb-tx:color-mix(in srgb,var(--sub),var(--ink) 15%);--tb-act:color-mix(in srgb,var(--blue),var(--ink) 37%);--tb-red:color-mix(in srgb,var(--red),#000 15%)}}
+/* uses live app.css vars: --ink --sub --blue --red (b12). --t-sf = rgb part of live --tabbar. No data-theme. */
+/* b13g: nav keeps .tabbar (lock/hide hooks); .tabbar.tb outranks the old app.css bar */
+.tabbar.tb{border-top:0;padding-bottom:var(--tb-pad);display:grid;--tb-pad:6px;position:fixed;z-index:20;left:0;right:0;margin-inline:auto;width:min(360px,calc(100% - max(16px,env(safe-area-inset-left)) - max(16px,env(safe-area-inset-right))));bottom:max(12px,env(safe-area-inset-bottom));height:64px;box-sizing:border-box;padding:var(--tb-pad);border-radius:32px;grid-template-columns:repeat(4,1fr);
+ background:color-mix(in srgb,var(--t-sf) var(--tb-a),transparent);
+ -webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);
+ box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 70%,transparent),inset 0 0 0 .5px color-mix(in srgb,#fff 35%,transparent),
+  0 0 0 .5px color-mix(in srgb,var(--t-ink) 14%,transparent),0 12px 32px -10px color-mix(in srgb,var(--t-ink) 35%,transparent)}
+@media (prefers-color-scheme:dark){.tabbar.tb{box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 18%,transparent),inset 0 0 0 .5px color-mix(in srgb,#fff 10%,transparent),0 0 0 .5px #000,0 14px 34px -10px #000}}
+.tb::before{content:"";position:absolute;top:var(--tb-pad);bottom:var(--tb-pad);left:var(--tb-pad);width:calc((100% - 2*var(--tb-pad))/4);border-radius:26px;
+ background:linear-gradient(180deg,color-mix(in srgb,#fff 22%,transparent),transparent 60%),color-mix(in srgb,var(--t-ac) 16%,transparent);
+ box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 75%,transparent),inset 0 -1px 0 color-mix(in srgb,var(--t-ink) 8%,transparent),0 4px 12px -6px color-mix(in srgb,var(--t-ac) 55%,transparent);
+ transform:translateX(calc(var(--tb-i,0)*100%));transition:transform .5s cubic-bezier(.3,1.35,.5,1)}
+@media (prefers-color-scheme:dark){.tb::before{background:linear-gradient(180deg,color-mix(in srgb,#fff 10%,transparent),transparent 60%),color-mix(in srgb,var(--t-ac) 16%,transparent);box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 22%,transparent),0 4px 12px -6px #000}}
+.tb:has(.tab:nth-child(2).on){--tb-i:1}.tb:has(.tab:nth-child(3).on){--tb-i:2}.tb:has(.tab:nth-child(4).on){--tb-i:3}
+.tb .tab{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;font-weight:600;letter-spacing:.01em;color:var(--tb-tx);text-decoration:none;border-radius:26px;-webkit-tap-highlight-color:transparent}
+.tb .tab.on{color:var(--tb-act)}
+.tb .tab svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;transition:transform .35s cubic-bezier(.3,1.35,.5,1)}
+.tb .tab .f{fill:currentColor;stroke:none;opacity:.16}.tb .tab.on .f{opacity:.3}
+.tb .tab.on svg{transform:scale(1.06)}
+.tb .tab:focus-visible{outline:2px solid var(--tb-act);outline-offset:-4px}
+.tb .cnt{position:absolute;top:4px;left:calc(50% + 6px);min-width:17px;height:17px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:var(--tb-red);color:#fff;font-size:11px;font-style:normal;font-weight:700;display:grid;place-items:center}
+.tb .cnt[hidden]{display:none}
+/* opaque fallbacks */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.tabbar.tb{background:var(--t-sf)}}
+@media (prefers-reduced-transparency:reduce){.tabbar.tb{background:var(--t-sf);-webkit-backdrop-filter:none;backdrop-filter:none}.tb::before{background:color-mix(in srgb,var(--t-ac) 16%,var(--t-sf))}}
+@media (prefers-reduced-motion:reduce){.tb::before,.tb .tab svg{transition:none}.tb .tab.on svg{transform:none}}
+/* content clearance: bar top = max(12px,safe-bottom)+64px; +16px breathing room */
+body{padding-bottom:calc(80px + max(12px,env(safe-area-inset-bottom)))}
+body.locked{padding-bottom:0}
+#toast{bottom:calc(88px + max(12px,env(safe-area-inset-bottom)))}
+body.two-pane #pane{bottom:0;padding-bottom:calc(80px + max(12px,env(safe-area-inset-bottom)))}
+.tb .tab{min-height:0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+

@@ -522,7 +522,7 @@ function redirect(){const h=location.hash,k=route(),q=(h.split("?")[1]||"");
 let RTREND=false;const route=()=>location.hash.replace(/^#\/?/,"").split("?")[0]||"home";
 let lastRoute="";
 function render(){redirect();const k=route(),fn=ROUTES[k]||home,changed=k!==lastRoute;lastRouteWas=lastRoute;if(k!==lastRoute&&$("#overlay").innerHTML){closeEntry()}lastRoute=k;if(k!=="list")$("#sheet").innerHTML="";
- $("#app").innerHTML=fn();const tk=k==="budget"||k==="sapling"||k==="forest"?"home":k;document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.r===tk));
+ $("#app").innerHTML=fn();const tk=k==="budget"||k==="sapling"||k==="forest"?"home":k;document.querySelectorAll(".tab").forEach(t=>{const o=t.dataset.r===tk;t.classList.toggle("on",o);o?t.setAttribute("aria-current","page"):t.removeAttribute("aria-current")});
  subBadge();if(k==="list")listRes("h");trendScroll();layout();afterRender(k,changed);revFill();spHydrate();if(k==="home")spAnimate();if(RTREND&&k==="report"){RTREND=false;const t=$("#trend");if(t)scrollTo(0,t.getBoundingClientRect().top+scrollY-70)}}
 const go=()=>{if(route()==="list"&&lastRoute==="list"&&$("#res")){const n=hashP();if(n!==pg){pg=n;listRes(true);pageTop();return}}render();window.scrollTo(0,0)};
 function pageTop(){const r=$("#res");if(!r)return;const y=Math.max(0,r.getBoundingClientRect().top+scrollY-($(".top")?$(".top").getBoundingClientRect().height:0)-8);if(scrollY>y)scrollTo({top:y,behavior:RM.matches?"auto":"smooth"});
